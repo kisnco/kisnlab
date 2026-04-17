@@ -1,38 +1,49 @@
-# 🦞 KisnLab — Stack IA locale
+# KisnLab — Stack IA locale
 
-Stack agentique complète pour piloter ta SASU depuis Discord.
+Stack agentique auto-hébergée pour piloter KIS'n Code depuis Discord.
 
-**OpenClaw** (agent conversationnel) + **n8n** (workflows) + **Postgres** (data) + **Langfuse** (coûts)
+**OpenClaw** (agent conversationnel) + **n8n** (workflows) + **Postgres/pgvector** (data) + **Langfuse** (observabilité) + **Traefik** (proxy)
 
 ---
 
-## 📁 Structure du projet
+## Structure du projet
 
 ```
 kisnlab/
+├── CLAUDE.md                          → instructions pour Claude Code
 ├── docker-compose.yml
-├── .env.example              → copie en .env et remplis
+├── .env.example                       → copie en .env et remplis
 ├── .gitignore
-├── README.md
+├── .claudeignore
 ├── config/
 │   ├── openclaw/
-│   │   ├── openclaw.json     → config LLM router + Discord
-│   │   └── HEARTBEAT.md      → check-list proactive 30min
+│   │   ├── openclaw.json              → config LLM router + Discord
+│   │   └── HEARTBEAT.md              → check-list proactive 30min
 │   └── postgres/
 │       └── init-multiple-dbs.sh
-├── skills/                   → tes "agents" en Markdown
+├── skills/                            → agents OpenClaw en Markdown
 │   ├── dev-reviewer/
 │   ├── dev-architect/
 │   ├── commercial-devis/
 │   ├── admin-facturation/
 │   ├── comm-linkedin/
 │   └── strategie-conseiller/
-└── workflows/                → exports n8n (versionnables)
+├── workflows/                         → exports n8n versionnés
+└── docs/
+    └── specs/                         → source de vérité du projet
+        ├── STACK.md
+        ├── DISCORD.md
+        ├── OPENCLAW.md
+        ├── N8N.md
+        ├── DATABASE.md
+        ├── SKILLS.md
+        ├── PROJETS.md
+        └── CHANGELOG.md
 ```
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Étape 1 — Prérequis
 
@@ -71,11 +82,12 @@ openssl rand -base64 24
 # N8N encryption key (ne JAMAIS changer après 1er lancement)
 openssl rand -hex 32
 
-# Langfuse secret
+# Langfuse secret + salt
+openssl rand -base64 32
 openssl rand -base64 32
 
-# Langfuse salt
-openssl rand -base64 32
+# Traefik dashboard (htpasswd format — remplace les $ par $$ dans .env)
+htpasswd -nb admin tonmotdepasse
 ```
 
 Colle chaque valeur dans `.env`.
@@ -96,7 +108,7 @@ Première fois : ~5-10 min pour télécharger les images.
 
 ---
 
-## 🎮 Setup Discord
+## Setup Discord
 
 ### 1. Crée un serveur Discord "KisnLab"
 
@@ -104,7 +116,6 @@ Dans Discord : "+" → Créer un serveur → "Pour moi et mes amis"
 
 ### 2. Crée les channels
 
-Crée ces channels texte dans ton serveur :
 ```
 📢 alertes
 👩‍💻 dev
@@ -118,25 +129,22 @@ Crée ces channels texte dans ton serveur :
 
 ### 3. Crée le bot
 
-1. Va sur https://discord.com/developers/applications
+1. [discord.com/developers/applications](https://discord.com/developers/applications)
 2. "New Application" → nom : **KisnLab Bot**
-3. Onglet "Bot" → "Add Bot"
-4. Copie le **Token** → colle dans `.env` `DISCORD_BOT_TOKEN`
-5. Active ces **Privileged Gateway Intents** :
+3. Onglet "Bot" → "Add Bot" → copie le **Token** → `.env` `DISCORD_BOT_TOKEN`
+4. Active ces **Privileged Gateway Intents** :
    - ✅ Server Members Intent
    - ✅ Message Content Intent
-6. Onglet "OAuth2" → "URL Generator"
+5. Onglet "OAuth2" → "URL Generator"
    - Scopes : `bot`
    - Permissions : `Send Messages` + `Read Message History` + `View Channels`
-7. Copie l'URL générée → ouvre dans le navigateur → invite le bot dans ton serveur
+6. Copie l'URL générée → ouvre dans le navigateur → invite le bot dans ton serveur
 
 ### 4. Récupère les IDs
 
-Active le **Mode Développeur** dans Discord :
-Paramètres utilisateur → Avancé → Mode développeur ✅
+Active le **Mode Développeur** : Paramètres utilisateur → Avancé → Mode développeur ✅
 
-Puis :
-- Clic droit sur **ton serveur** → "Copier l'identifiant du serveur" → `DISCORD_GUILD_ID`
+- Clic droit sur **ton serveur** → "Copier l'identifiant" → `DISCORD_GUILD_ID`
 - Clic droit sur **toi-même** → "Copier l'identifiant" → `DISCORD_YOUR_USER_ID`
 - Clic droit sur chaque **channel** → "Copier l'identifiant" → les `DISCORD_CHANNEL_*`
 
@@ -144,18 +152,18 @@ Remplis tout dans `.env`.
 
 ---
 
-## 🔗 Accès aux interfaces
+## Accès aux interfaces
 
 | Service | URL | Identifiants |
-|---|---|---|
-| 🔗 n8n | http://n8n.kisnlab.local | `N8N_USER` / `N8N_PASSWORD` |
-| 📊 Langfuse | http://langfuse.kisnlab.local | À créer au 1er login |
-| 🦞 OpenClaw | http://openclaw.kisnlab.local | — |
-| 🚦 Traefik | http://traefik.kisnlab.local | `TRAEFIK_DASHBOARD_AUTH` |
+|---------|-----|-------------|
+| n8n | http://n8n.kisnlab.local | `N8N_USER` / `N8N_PASSWORD` |
+| Langfuse | http://langfuse.kisnlab.local | À créer au 1er login |
+| OpenClaw | http://openclaw.kisnlab.local | — |
+| Traefik | http://traefik.kisnlab.local | `TRAEFIK_DASHBOARD_AUTH` |
 
 ---
 
-## 📊 Activer Langfuse (Étape 2)
+## Activer Langfuse (étape 2)
 
 1. Ouvre http://langfuse.kisnlab.local
 2. Crée ton compte admin
@@ -170,7 +178,7 @@ Remplis tout dans `.env`.
 
 ---
 
-## 🧪 Premier test
+## Premier test
 
 Envoie dans `#dev` sur ton serveur Discord :
 ```
@@ -181,10 +189,10 @@ Le bot doit répondre avec une review structurée.
 
 ---
 
-## 🛠 Commandes utiles
+## Commandes utiles
 
 ```bash
-# Voir les logs en temps réel
+# Logs en temps réel
 docker compose logs -f openclaw
 docker compose logs -f n8n
 
@@ -206,52 +214,50 @@ docker exec -it kisnlab-openclaw sh
 
 ---
 
-## 💬 Comment utiliser les channels Discord
+## Channels Discord
 
-| Channel | Exemple de message |
-|---|---|
-| **#dev** | `@bot review le fichier Auth.php` |
-| **#dev** | `@bot propose une archi pour [feature]` |
-| **#commercial** | `@bot fais un devis pour [brief client]` |
-| **#admin** | `@bot génère la facture pour [client] [montant]` |
-| **#comm** | `@bot écris un post LinkedIn sur [sujet]` |
-| **#strategie** | `@bot dois-je accepter cette mission à [tarif] ?` |
-| **#alertes** | ← automatique (n8n + heartbeat) |
-| **#briefs** | ← automatique (résumé hebdo n8n) |
-
----
-
-## ⚠️ Sécurité — avant toute exposition publique
-
-Cette stack est pour du **dev local uniquement**.
-Avant de la rendre accessible depuis Internet :
-
-- [ ] Activer HTTPS (Traefik + Let's Encrypt ou Cloudflare Tunnel)
-- [ ] Restreindre `allowedUsers` dans `openclaw.json` à ton seul ID Discord
-- [ ] Changer tous les mots de passe par défaut
-- [ ] Activer 2FA sur n8n
-- [ ] Configurer les backups Postgres (Restic + Backblaze B2)
-- [ ] Mettre le pare-feu macOS actif
+| Channel | Usage | LLM |
+|---------|-------|-----|
+| `#dev` | `@bot review le fichier Auth.php` | Sonnet |
+| `#dev` | `@bot propose une archi pour [feature]` | Sonnet |
+| `#commercial` | `@bot fais un devis pour [brief client]` | Sonnet |
+| `#admin` | `@bot génère la facture pour [client] [montant]` | Sonnet |
+| `#comm` | `@bot écris un post LinkedIn sur [sujet]` | Haiku |
+| `#strategie` | `@bot dois-je accepter cette mission à [tarif] ?` | Sonnet |
+| `#alertes` | ← automatique (heartbeat + n8n) | — |
+| `#briefs` | ← automatique (résumés hebdo n8n) | — |
+| `#logs` | ← automatique (traces Langfuse) | — |
 
 ---
 
-## 🆘 Troubleshooting
+## Troubleshooting
 
 **"Cannot connect to n8n.kisnlab.local"**
 → Vérifie `/etc/hosts` — les 4 lignes doivent être présentes
 
 **"Postgres ne démarre pas"**
-→ `docker compose logs postgres` — souvent un problème de permission sur le script init
-→ Solution : `chmod +x config/postgres/init-multiple-dbs.sh`
+→ `docker compose logs postgres`
+→ `chmod +x config/postgres/init-multiple-dbs.sh`
 
 **"Le bot Discord ne répond pas"**
 → Vérifie que `Message Content Intent` est activé dans le Developer Portal
-→ `docker compose logs openclaw` pour voir l'erreur
+→ `docker compose logs openclaw`
 
 **"Langfuse ne trace rien"**
-→ Les clés `LANGFUSE_PUBLIC_KEY` et `LANGFUSE_SECRET_KEY` doivent être remplies
-→ Puis `docker compose restart openclaw`
+→ `LANGFUSE_PUBLIC_KEY` et `LANGFUSE_SECRET_KEY` doivent être remplies dans `.env`
+→ `docker compose restart openclaw`
+
+**"Traefik dashboard : 401 Unauthorized"**
+→ Vérifie `TRAEFIK_DASHBOARD_AUTH` dans `.env` — les `$` doivent être doublés en `$$`
 
 ---
 
-Made with 🦞 pour KisnLab
+## Sécurité V2 (juin 2026 — Mac mini M4 Pro)
+
+Avant toute exposition publique :
+
+- [ ] HTTPS via Cloudflare Tunnel ou Let's Encrypt
+- [ ] Activer 2FA sur n8n
+- [ ] Configurer les backups Postgres (Restic + Backblaze B2)
+- [ ] Activer Ollama local (Llama 70B Q4)
+- [ ] Pare-feu macOS actif
