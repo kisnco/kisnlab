@@ -1,0 +1,30 @@
+# Secrets
+.env
+.env.local
+*.key
+*.pem
+
+# Docker
+data/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code local
+.claude/settings.local.json
+
+# OpenClaw cache
+.openclaw-cache/
+config/openclaw/memory/
+
+# n8n exports temporaires
+workflows/exports/

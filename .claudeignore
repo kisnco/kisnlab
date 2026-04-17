@@ -1,0 +1,30 @@
+# Secrets — jamais lus par Claude
+.env
+.env.local
+*.key
+*.pem
+
+# Mémoire OpenClaw — données runtime, non pertinentes pour le code
+config/openclaw/memory/
+.openclaw-cache/
+
+# Données Docker persistantes
+data/
+
+# Logs
+logs/
+*.log
+
+# Exports n8n temporaires
+workflows/exports/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code local
+.claude/settings.local.json

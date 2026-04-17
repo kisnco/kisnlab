@@ -1,0 +1,107 @@
+# STACK.md — Services Docker
+
+_Source de vérité pour l'infrastructure KisnLab._
+
+---
+
+## Vue d'ensemble
+
+Stack IA auto-hébergée tournant sur **MacBook Pro Intel 2019 (32 Go)** en local.
+Accès via domaines `.kisnlab.local` routés par Traefik.
+
+---
+
+## Services
+
+| Service | Image | Rôle | URL locale |
+|---------|-------|------|-----------|
+| **Traefik** | `traefik:v3.2` | Reverse proxy, routing par domaine | `http://traefik.kisnlab.local` |
+| **Postgres** | `pgvector/pgvector:pg16` | Base relationnelle + vectorielle | interne uniquement |
+| **Redis** | `redis:7-alpine` | Queue et cache pour n8n | interne uniquement |
+| **OpenClaw** | `openclaw/openclaw:latest` | Agent IA conversationnel Discord | `http://openclaw.kisnlab.local` |
+| **n8n** | `n8nio/n8n:latest` | Workflows automatisés | `http://n8n.kisnlab.local` |
+| **Langfuse** | `langfuse/langfuse:latest` | Observabilité LLM | `http://langfuse.kisnlab.local` |
+
+---
+
+## Ports exposés sur l'hôte
+
+| Port | Service | Usage |
+|------|---------|-------|
+| `80` | Traefik | Entrée HTTP pour tous les services |
+
+> Postgres (5432) et Redis (6379) ne sont **pas** exposés sur l'hôte — internes uniquement.
+> Le dashboard Traefik est accessible via `http://traefik.kisnlab.local` avec basicauth.
+
+---
+
+## Réseau Docker
+
+```
+kisnlab-net (bridge)
+└── tous les services communiquent via hostname Docker
+    ex: postgres → redis → openclaw → n8n → langfuse
+```
+
+---
+
+## Volumes persistants
+
+| Volume | Service | Contenu |
+|--------|---------|---------|
+| `postgres_data` | Postgres | Données BDD (survit aux `docker compose down`) |
+| `redis_data` | Redis | Queue persistante n8n |
+| `openclaw_data` | OpenClaw | Cache et données internes |
+| `n8n_data` | n8n | Credentials, workflows, executions |
+
+---
+
+## Dépendances de démarrage
+
+```
+Postgres (healthy) ─┬─→ OpenClaw
+                    └─→ n8n
+                    └─→ Langfuse
+
+Redis (healthy) ────┬─→ OpenClaw
+                    └─→ n8n
+```
+
+---
+
+## /etc/hosts requis
+
+```
+127.0.0.1   openclaw.kisnlab.local
+127.0.0.1   n8n.kisnlab.local
+127.0.0.1   langfuse.kisnlab.local
+127.0.0.1   traefik.kisnlab.local
+```
+
+---
+
+## Variables d'environnement critiques
+
+Toutes dans `.env` (jamais committées). Voir `.env.example` pour la liste complète.
+
+| Variable | Usage |
+|----------|-------|
+| `ANTHROPIC_API_KEY` | Clé Claude API |
+| `POSTGRES_USER / PASSWORD` | Auth Postgres |
+| `REDIS_PASSWORD` | Auth Redis |
+| `N8N_ENCRYPTION_KEY` | Ne jamais changer après 1er lancement |
+| `LANGFUSE_SECRET / SALT` | Auth Langfuse |
+| `TRAEFIK_DASHBOARD_AUTH` | Basicauth dashboard Traefik (htpasswd format) |
+| `DISCORD_BOT_TOKEN` | Token bot Discord |
+
+---
+
+## Plan V2 — Juin 2026
+
+Migration sur **Mac mini M4 Pro 48 Go** :
+- KisnLab tourne 24/7 en production
+- Ollama local (Llama 70B Q4) pour inférence gratuite
+- HTTPS via Cloudflare Tunnel ou Let's Encrypt
+- Backups Postgres avec Restic + Backblaze B2
+
+> Le Scaleway PLAY2-MICRO est réservé à Kis'n Way et site KIS'n Code — ne pas y déployer KisnLab.
