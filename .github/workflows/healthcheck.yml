@@ -1,0 +1,91 @@
+name: Repo Healthcheck
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    - cron: "0 */12 * * *"  # Twice daily
+
+jobs:
+  repository-health:
+    name: Repository Health
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check repository structure
+        run: |
+          echo "🔍 Checking repository structure..."
+          
+          # Required directories
+          required_dirs=("skills" "config" "docs" "workflows")
+          for dir in "${required_dirs[@]}"; do
+            if [ -d "$dir" ]; then
+              echo "  ✅ $dir/"
+            else
+              echo "  ❌ Missing $dir/"
+              exit 1
+            fi
+          done
+
+      - name: Check for secrets in code
+        run: |
+          echo "🔐 Scanning for exposed secrets..."
+          # Basic patterns to catch common secrets
+          patterns=(
+            "ghp_[a-zA-Z0-9]{36}"
+            "github_pat_[a-zA-Z0-9]{22,255}"
+            "sk-[a-zA-Z0-9]{48}"
+            "pk-[a-zA-Z0-9]{16,}"
+          )
+          
+          found=0
+          for pattern in "${patterns[@]}"; do
+            if grep -r -E "$pattern" --exclude-dir=.git --exclude-dir=.idea --exclude="*.lock" . 2>/dev/null; then
+              echo "  ⚠️  Pattern found: $pattern"
+              found=$((found + 1))
+            fi
+          done
+          
+          if [ $found -gt 0 ]; then
+            echo "  ❌ Possible secrets found! Review before pushing."
+            exit 1
+          else
+            echo "  ✅ No obvious secrets detected"
+          fi
+
+      - name: Git statistics
+        run: |
+          echo "📊 Repository Statistics"
+          echo "  Commits: $(git rev-list --count HEAD)"
+          echo "  Branches: $(git branch -r | wc -l)"
+          echo "  Contributors: $(git shortlog -sn | wc -l)"
+          echo "  Last commit: $(git log -1 --format='%h - %s (%ai)')"
+
+      - name: File statistics
+        run: |
+          echo "📁 File Statistics"
+          echo "  Total files: $(find . -type f -not -path './.git/*' -not -path './.idea/*' | wc -l)"
+          echo "  Skills: $(find skills -name SKILL.md | wc -l)"
+          echo "  Workflows: $(find workflows -name "*.json" | wc -l)"
+          echo "  Documentation files: $(find docs -name "*.md" | wc -l)"
+
+  dependencies-check:
+    name: Dependencies & Requirements
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Docker images
+        run: |
+          echo "🐳 Docker images in docker-compose.yml:"
+          grep "image:" docker-compose.yml | sed 's/.*image: /  ✓ /' || true
+
+      - name: Verify docker-compose services
+        run: |
+          echo "🚀 Services configured:"
+          grep "^  [a-z].*:$" docker-compose.yml | sed 's/.*: /  ✓ /' || true

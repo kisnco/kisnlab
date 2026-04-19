@@ -1,0 +1,85 @@
+name: Lint & Validate
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  shellcheck:
+    name: Shell Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck
+        run: |
+          sudo apt-get install -y shellcheck
+          find scripts -name "*.sh" -type f | xargs shellcheck --format=gcc || true
+
+  docker-compose:
+    name: Docker Compose Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate docker-compose.yml
+        run: |
+          docker-compose config > /dev/null
+          echo "✅ docker-compose.yml is valid"
+
+  json-validate:
+    name: JSON Files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JSON files
+        run: |
+          find . -name "*.json" -not -path "./node_modules/*" -not -path "./.git/*" -not -path "./config/openclaw/*" | while read file; do
+            python3 -m json.tool "$file" > /dev/null && echo "✅ $file" || echo "❌ $file"
+          done
+
+  skills-validate:
+    name: Skills Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check SKILL.md files
+        run: |
+          for skill_dir in skills/*/; do
+            if [ -f "${skill_dir}SKILL.md" ]; then
+              echo "✅ Found ${skill_dir}SKILL.md"
+              # Check for required YAML frontmatter
+              if head -1 "${skill_dir}SKILL.md" | grep -q "^---"; then
+                echo "  ✓ Has frontmatter"
+              else
+                echo "  ❌ Missing frontmatter"
+                exit 1
+              fi
+            else
+              echo "❌ Missing ${skill_dir}SKILL.md"
+              exit 1
+            fi
+          done
+
+  env-validation:
+    name: Environment Variables
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check .env.example
+        run: |
+          if [ ! -f .env.example ]; then
+            echo "❌ .env.example not found"
+            exit 1
+          fi
+          echo "✅ .env.example exists"
+          # Check for required env vars
+          required_vars=("ANTHROPIC_API_KEY" "DISCORD_BOT_TOKEN" "GITHUB_TOKEN" "POSTGRES_PASSWORD")
+          for var in "${required_vars[@]}"; do
+            if grep -q "^${var}=" .env.example; then
+              echo "  ✓ ${var}"
+            else
+              echo "  ❌ Missing ${var}"
+              exit 1
+            fi
+          done

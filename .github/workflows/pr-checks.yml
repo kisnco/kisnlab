@@ -1,0 +1,80 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    branches: [main, dev]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  pr-metadata:
+    name: PR Metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR description
+        run: |
+          echo "📋 PR Information"
+          echo "  Title: ${{ github.event.pull_request.title }}"
+          echo "  Author: ${{ github.event.pull_request.user.login }}"
+          echo "  Files changed: ${{ github.event.pull_request.changed_files }}"
+          
+          if [ -z "${{ github.event.pull_request.body }}" ]; then
+            echo "  ⚠️  PR description is empty"
+          else
+            echo "  ✅ PR has description"
+          fi
+
+      - name: Check branch naming
+        run: |
+          branch_name="${{ github.event.pull_request.head.ref }}"
+          
+          if [[ $branch_name =~ ^(feature|fix|docs|refactor|chore|test)/ ]]; then
+            echo "✅ Branch follows naming convention: $branch_name"
+          else
+            echo "⚠️  Branch should follow pattern: feature/, fix/, docs/, etc."
+          fi
+
+  changed-files:
+    name: Changed Files Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        run: |
+          echo "Files changed in this PR:"
+          git diff --name-only origin/${{ github.base_ref }}...HEAD | sed 's/^/  ✓ /'
+
+      - name: Check for documentation changes
+        run: |
+          docs_changed=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.(md|txt)$' || echo "")
+          code_changed=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -vE '\.(md|txt|json)$' || echo "")
+          
+          if [ -n "$code_changed" ] && [ -z "$docs_changed" ]; then
+            echo "⚠️  Code changed but no documentation updates"
+          fi
+
+  commit-messages:
+    name: Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate commit messages
+        run: |
+          echo "📝 Commit messages:"
+          git log origin/${{ github.base_ref }}...HEAD --pretty=format:"%h - %s" | while read commit; do
+            if [[ $commit =~ ^[a-f0-9]{7}\ -(\ (feat|fix|docs|refactor|test|chore):|\[) ]]; then
+              echo "  ✅ $commit"
+            else
+              echo "  ⚠️  $commit (consider: feat:, fix:, docs:, etc.)"
+            fi
+          done
