@@ -1,228 +1,140 @@
 {
-  "_comment": "KisnLab — Configuration OpenClaw avec Discord multi-channels",
-
-  "models": {
-    "primary": {
-      "_comment": "Claude Sonnet → tâches critiques (archi, review, conseil, juridique)",
-      "provider": "anthropic",
-      "model": "claude-sonnet-4-20250514",
-      "apiKey": "${ANTHROPIC_API_KEY}",
-      "maxTokens": 4096
-    },
-    "fast": {
-      "_comment": "Claude Haiku → tâches simples (résumés, classif, formatage, docs)",
-      "provider": "anthropic",
-      "model": "claude-haiku-4-5-20251001",
-      "apiKey": "${ANTHROPIC_API_KEY}",
-      "maxTokens": 2048
-    }
-  },
-
-  "routing": {
-    "_comment": "Règles de routing LLM : channel ou skill → quel modèle",
-    "rules": [
-      {
-        "_comment": "Skills critiques → always Claude Sonnet",
-        "match": {
-          "skill": [
-            "dev-architect",
-            "dev-reviewer",
-            "strategie-conseiller",
-            "admin-juridique",
-            "admin-fiscalite",
-            "commercial-devis"
-          ]
-        },
-        "use": "primary"
-      },
-      {
-        "_comment": "Channel dev et stratégie → toujours Sonnet",
-        "match": {
-          "channelEnv": ["DISCORD_CHANNEL_DEV", "DISCORD_CHANNEL_STRATEGIE"]
-        },
-        "use": "primary"
-      },
-      {
-        "_comment": "Tout le reste → Haiku (moins cher, assez bon)",
-        "default": true,
-        "use": "fast"
-      }
-    ]
-  },
-
   "channels": {
     "discord": {
       "enabled": true,
-      "token": "${DISCORD_BOT_TOKEN}",
-      "guildId": "${DISCORD_GUILD_ID}",
-
-      "_comment_security": "Seul ton user ID peut interagir avec le bot",
-      "allowedUsers": ["${DISCORD_YOUR_USER_ID}"],
-
-      "channelMapping": {
-
-        "${DISCORD_CHANNEL_DEV}": {
-          "label": "#dev",
-          "description": "Code, architecture, review, QA",
-          "defaultSkills": [
-            "dev-architect",
-            "dev-reviewer",
-            "dev-developer",
-            "dev-qa",
-            "dev-doc"
-          ],
-          "llm": "primary"
-        },
-
-        "${DISCORD_CHANNEL_COMMERCIAL}": {
-          "label": "#commercial",
-          "description": "Devis, CRM, prospection",
-          "defaultSkills": [
-            "commercial-devis",
-            "commercial-crm",
-            "commercial-prospection"
-          ],
-          "llm": "primary"
-        },
-
-        "${DISCORD_CHANNEL_ADMIN}": {
-          "label": "#admin",
-          "description": "Facturation, compta, juridique, fiscalité",
-          "defaultSkills": [
-            "admin-facturation",
-            "admin-compta",
-            "admin-juridique",
-            "admin-fiscalite"
-          ],
-          "llm": "primary"
-        },
-
-        "${DISCORD_CHANNEL_COMM}": {
-          "label": "#comm",
-          "description": "LinkedIn, blog, newsletter, SEO",
-          "defaultSkills": [
-            "comm-linkedin",
-            "comm-blog",
-            "comm-newsletter",
-            "comm-seo"
-          ],
-          "llm": "fast"
-        },
-
-        "${DISCORD_CHANNEL_STRATEGIE}": {
-          "label": "#strategie",
-          "description": "Décisions, veille, pricing, bizdev",
-          "defaultSkills": [
-            "strategie-conseiller",
-            "strategie-veille",
-            "strategie-pricing",
-            "strategie-bizdev"
-          ],
-          "llm": "primary"
-        },
-
-        "${DISCORD_CHANNEL_ALERTES}": {
-          "label": "#alertes",
-          "_comment": "Notifications urgentes — n8n poste ici automatiquement",
-          "readOnly": true,
-          "webhookSource": "n8n"
-        },
-
-        "${DISCORD_CHANNEL_BRIEFS}": {
-          "label": "#briefs",
-          "_comment": "Résumés hebdo et rapports automatiques via n8n",
-          "readOnly": true,
-          "webhookSource": "n8n"
-        },
-
-        "${DISCORD_CHANNEL_LOGS}": {
-          "label": "#logs",
-          "_comment": "Traces Langfuse filtrées — erreurs et coûts",
-          "readOnly": true,
-          "webhookSource": "langfuse"
+      "token": {
+        "source": "env",
+        "provider": "default",
+        "id": "DISCORD_BOT_TOKEN"
+      },
+      "guilds": {
+        "1494702306472628274": {
+          "requireMention": false,
+          "users": [
+            "1494696457108983900"
+          ]
         }
-
       }
     }
   },
-
+  "meta": {
+    "lastTouchedVersion": "2026.4.15",
+    "lastTouchedAt": "2026-04-19T17:04:26.294Z"
+  },
+  "gateway": {
+    "auth": {
+      "mode": "token",
+      "token": "dcb15206afb44f5a48613e34eddf82d5ecaa1df760ed4c5b"
+    },
+    "controlUi": {
+      "allowedOrigins": [
+        "http://localhost:18789",
+        "http://127.0.0.1:18789",
+        "http://openclaw.kisnlab.local"
+      ]
+    },
+    "mode": "local",
+    "port": 18789,
+    "bind": "auto",
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    }
+  },
   "agents": {
     "defaults": {
-      "sandbox": {
-        "mode": "non-main",
-        "_comment": "Sessions non-main dans des containers Docker isolés"
+      "model": "anthropic/claude-haiku-4-5-20251001",
+      "workspace": "/home/node/.openclaw/workspace",
+      "models": {
+        "anthropic/claude-opus-4-7": {}
+      }
+    }
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "tools": {
+    "profile": "coding"
+  },
+  "plugins": {
+    "entries": {
+      "anthropic": {
+        "enabled": true
       },
-      "tools": {
-        "allow": [
-          "bash",
-          "read",
-          "write",
-          "edit",
-          "sessions_list",
-          "sessions_history"
-        ],
-        "deny": [
-          "browser",
-          "gateway",
-          "cron"
-        ]
-      },
-      "approvals": {
-        "_comment": "Ces actions s'arrêtent et attendent ta réponse dans Discord",
-        "require": [
-          "email_send",
-          "file_delete",
-          "git_push",
-          "payment",
-          "publish"
+      "webhooks": {
+        "enabled": true,
+        "config": {
+          "routes": {
+            "n8n": {
+              "path": "/plugins/webhooks/n8n",
+              "sessionKey": "agent:main:main",
+              "secret": {
+                "source": "env",
+                "provider": "default",
+                "id": "OPENCLAW_WEBHOOK_SECRET"
+              },
+              "description": "Bridge n8n → OpenClaw TaskFlow"
+            }
+          }
+        }
+      }
+    }
+  },
+  "auth": {
+    "profiles": {
+      "anthropic:default": {
+        "provider": "anthropic",
+        "mode": "api_key"
+      }
+    }
+  },
+  "skills": {
+    "install": {
+      "nodeManager": "npm"
+    }
+  },
+  "wizard": {
+    "lastRunAt": "2026-04-19T12:42:34.512Z",
+    "lastRunVersion": "2026.4.15",
+    "lastRunCommand": "onboard",
+    "lastRunMode": "local"
+  },
+  "models": {
+    "providers": {
+      "anthropic": {
+        "baseUrl": "https://api.anthropic.com",
+        "apiKey": {
+          "source": "env",
+          "provider": "default",
+          "id": "ANTHROPIC_API_KEY"
+        },
+        "models": [
+          {
+            "id": "claude-sonnet-4-6",
+            "name": "Claude Sonnet 4.6",
+            "api": "anthropic-messages"
+          },
+          {
+            "id": "claude-haiku-4-5-20251001",
+            "name": "Claude Haiku 4.5",
+            "api": "anthropic-messages"
+          }
         ]
       }
     }
   },
-
-  "heartbeat": {
-    "enabled": true,
-    "interval": "30m",
-    "_comment": "Vérifie HEARTBEAT.md toutes les 30 min — poste dans #alertes si besoin"
-  },
-
-  "memory": {
-    "markdown": {
-      "path": "/workspace/memory",
-      "_comment": "Mémoire long terme par projet en fichiers Markdown"
-    },
-    "vector": {
-      "_comment": "Mémoire sémantique — embeddings stockés dans Postgres pgvector",
-      "provider": "postgres",
-      "connectionUrl": "${DATABASE_URL}",
-      "table": "memory_embeddings",
-      "embeddingModel": "claude"
-    }
-  },
-
-  "observability": {
-    "langfuse": {
+  "diagnostics": {
+    "otel": {
       "enabled": true,
-      "host": "http://langfuse:3000",
-      "publicKey": "${LANGFUSE_PUBLIC_KEY}",
-      "secretKey": "${LANGFUSE_SECRET_KEY}",
-      "_comment": "Remplis les clés après le 1er login Langfuse — voir README"
+      "endpoint": "http://kisnlab-langfuse:3000/api/public/otel",
+      "protocol": "http/protobuf",
+      "serviceName": "kisnlab-openclaw",
+      "traces": true,
+      "metrics": false,
+      "logs": false,
+      "headers": {
+        "Authorization": "Basic cGstbGYtZDZkNWRjNjEtNDMxOS00NTNjLTg1NDAtYWVlODAzYTYwOTk1OnNrLWxmLTViYmQ3MzY4LWU2MDAtNDg0Ni1iNGM0LTc5ZWNhMWU4M2ZmNw=="
+      }
     }
-  },
-
-  "gateway": {
-    "port": 18789,
-    "bindHost": "0.0.0.0"
-  },
-
-  "projects": {
-    "_comment": "Mémoire isolée par projet — KisnLab gère les 5 simultanément",
-    "list": [
-      { "id": "scoreboard",   "label": "Scoreboard Python",  "type": "client" },
-      { "id": "site",         "label": "Site KisnCo",        "type": "perso"  },
-      { "id": "app-mobile",   "label": "App Alignement",     "type": "perso"  },
-      { "id": "prestation",   "label": "Nouvelle prestation", "type": "perso" },
-      { "id": "comptabilite", "label": "Outil compta",       "type": "perso"  }
-    ]
   }
 }

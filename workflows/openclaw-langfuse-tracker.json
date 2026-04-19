@@ -1,0 +1,109 @@
+{
+  "name": "openclaw-langfuse-tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "openclaw-usage",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
+      "name": "Webhook",
+      "webhookId": "openclaw-usage"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.item.json.body || $input.item.json;\n\nconst sessionId = body.sessionId || 'unknown';\nconst model = body.model || 'claude-haiku-4-5-20251001';\nconst inputTokens = body.usage?.input || body.inputTokens || 0;\nconst outputTokens = body.usage?.output || body.outputTokens || 0;\nconst message = body.message || '';\nconst response = body.response || '';\nconst channel = body.channel || 'discord';\nconst timestamp = new Date().toISOString();\n\nreturn {\n  json: {\n    tracePayload: {\n      name: 'openclaw-discord-message',\n      sessionId: sessionId,\n      input: { message, channel },\n      output: { response },\n      metadata: {\n        model,\n        channel,\n        source: 'kisnlab-openclaw'\n      },\n      usage: {\n        input: inputTokens,\n        output: outputTokens,\n        unit: 'TOKENS'\n      }\n    },\n    generationPayload: {\n      name: 'claude-response',\n      traceId: null,\n      model: model,\n      modelParameters: {},\n      input: [{ role: 'user', content: message }],\n      output: { role: 'assistant', content: response },\n      usage: {\n        input: inputTokens,\n        output: outputTokens,\n        unit: 'TOKENS'\n      },\n      startTime: timestamp,\n      endTime: timestamp\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [208, 0],
+      "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
+      "name": "Prepare Langfuse Payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LANGFUSE_BASE_URL }}/api/public/traces",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.tracePayload) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [416, 0],
+      "id": "f6a7b8c9-d0e1-2345-fabc-456789012345",
+      "name": "Create Langfuse Trace",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "langfuse-basic-auth",
+          "name": "Langfuse Basic Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\": true}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [624, 0],
+      "id": "a7b8c9d0-e1f2-3456-abcd-567890123456",
+      "name": "Respond"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Langfuse Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Langfuse Payload": {
+      "main": [
+        [
+          {
+            "node": "Create Langfuse Trace",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Langfuse Trace": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b2c3d4e5-f6a7-8901-bcde-f12345678902",
+  "meta": {
+    "instanceId": "ba6b6812fc94f198443729b760d3d1d8fa9f56c2d3aaf88ff27f44e6d6382776"
+  },
+  "id": "",
+  "tags": []
+}

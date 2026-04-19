@@ -82,7 +82,7 @@ services:
   # Accès UI : http://openclaw.kisnlab.local
   # ---------------------------------------------------------------------------
   openclaw:
-    image: openclaw/openclaw:latest
+    image: alpine/openclaw:latest
     container_name: kisnlab-openclaw
     restart: unless-stopped
     depends_on:
@@ -98,6 +98,7 @@ services:
       # Discord
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
+      DISCORD_YOUR_USER_ID: ${DISCORD_YOUR_USER_ID}
       # Channels Discord par pôle
       DISCORD_CHANNEL_DEV: ${DISCORD_CHANNEL_DEV}
       DISCORD_CHANNEL_COMMERCIAL: ${DISCORD_CHANNEL_COMMERCIAL}
@@ -107,12 +108,21 @@ services:
       DISCORD_CHANNEL_ALERTES: ${DISCORD_CHANNEL_ALERTES}
       DISCORD_CHANNEL_BRIEFS: ${DISCORD_CHANNEL_BRIEFS}
       DISCORD_CHANNEL_LOGS: ${DISCORD_CHANNEL_LOGS}
+      # GitHub
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
       # Workspace
-      OPENCLAW_WORKSPACE: /workspace
+      OPENCLAW_STATE_DIR: /workspace
+      OPENCLAW_WEBHOOK_SECRET: ${OPENCLAW_WEBHOOK_SECRET}
+      # Observabilité — Langfuse via OTel
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL}
     volumes:
       - ./config/openclaw:/workspace
       - ./skills:/workspace/skills
       - openclaw_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/repo/kisnlab
     networks:
       - kisnlab-net
     labels:
@@ -154,12 +164,13 @@ services:
       QUEUE_BULL_REDIS_PORT: 6379
       QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
       # Auth
-      N8N_BASIC_AUTH_ACTIVE: "true"
-      N8N_BASIC_AUTH_USER: ${N8N_USER}
-      N8N_BASIC_AUTH_PASSWORD: ${N8N_PASSWORD}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
-      # Discord (pour que n8n puisse poster dans tes channels)
-      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      N8N_SECURE_COOKIE: "false"
+      # Discord — webhooks par channel (pas de bot token, évite les conflits gateway)
+      DISCORD_WEBHOOK_ALERTES: ${DISCORD_WEBHOOK_ALERTES}
+      DISCORD_WEBHOOK_BRIEFS: ${DISCORD_WEBHOOK_BRIEFS}
+      DISCORD_WEBHOOK_LOGS: ${DISCORD_WEBHOOK_LOGS}
+      DISCORD_WEBHOOK_ADMIN: ${DISCORD_WEBHOOK_ADMIN}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/workflows
@@ -171,29 +182,105 @@ services:
       - "traefik.http.services.n8n.loadbalancer.server.port=5678"
 
   # ---------------------------------------------------------------------------
-  # LANGFUSE — Observabilité LLM (tokens, coûts, traces, latence)
+  # CLICKHOUSE — Moteur analytique pour Langfuse v3
+  # ---------------------------------------------------------------------------
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.12
+    container_name: kisnlab-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./config/clickhouse/config.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kisnlab-net
+
+  # ---------------------------------------------------------------------------
+  # LANGFUSE v3 WEB — Observabilité LLM (tokens, coûts, traces, latence)
   # Accès UI : http://langfuse.kisnlab.local
   # ---------------------------------------------------------------------------
-  langfuse:
-    image: langfuse/langfuse:latest
+  langfuse-web:
+    image: langfuse/langfuse:3
     container_name: kisnlab-langfuse
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/langfuse
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${REDIS_PASSWORD}
       NEXTAUTH_URL: http://langfuse.kisnlab.local
       NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
       SALT: ${LANGFUSE_SALT}
       TELEMETRY_ENABLED: "false"
       LANGFUSE_DEFAULT_PROJECT_ROLE: VIEWER
+      LANGFUSE_INIT_ORG_ID: kisnlab
+      LANGFUSE_INIT_ORG_NAME: KisnLab
+      LANGFUSE_INIT_PROJECT_ID: kisnlab-main
+      LANGFUSE_INIT_PROJECT_NAME: KisnLab
+      LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "false"
+      LANGFUSE_S3_MEDIA_UPLOAD_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: "disabled"
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: "disabled"
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: "us-east-1"
     networks:
       - kisnlab-net
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.langfuse.rule=Host(`langfuse.kisnlab.local`)"
       - "traefik.http.services.langfuse.loadbalancer.server.port=3000"
+
+  # ---------------------------------------------------------------------------
+  # LANGFUSE v3 WORKER — Traitement asynchrone des traces
+  # ---------------------------------------------------------------------------
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    container_name: kisnlab-langfuse-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/langfuse
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${REDIS_PASSWORD}
+      NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
+      SALT: ${LANGFUSE_SALT}
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "false"
+      LANGFUSE_S3_MEDIA_UPLOAD_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: "disabled"
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: "disabled"
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: "us-east-1"
+    networks:
+      - kisnlab-net
 
 # =============================================================================
 # VOLUMES — Données persistantes (survivent aux docker compose down)
@@ -206,6 +293,8 @@ volumes:
   openclaw_data:
     driver: local
   n8n_data:
+    driver: local
+  clickhouse_data:
     driver: local
 
 # =============================================================================

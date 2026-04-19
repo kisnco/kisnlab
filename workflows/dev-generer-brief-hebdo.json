@@ -1,0 +1,120 @@
+{
+  "name": "dev-generer-brief-hebdo",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5e8650b0-c1cf-4b27-8ca9-c53d98ad81a4",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages ",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": " { \n   \"model\": \"claude-haiku-4-5-20251001\", \n   \"max_tokens\": 1024,                     \n   \"messages\": [\n     {                                          \"role\": \"user\",\n       \"content\": \"Tu es l'assistant de KIS'n Code, une boîte de dev & conseil. Génère le brief hebdomadaire en français avec : les 5 projets actifs (scoreboard Python client, site KisnCo, app Alignement, nouvelle prestation IA, outil compta SASU), les priorités de la semaine, et les points d'attention. Format court, bullet points, ton professionnel.\"             }                     \n    ]  \n  }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "05c37d0c-83b8-4f00-b985-83947e6ed02a",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "31kDEitPn7QEusrA",
+          "name": "Header Auth API anthropic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/1495383195213107200/FiNYG0b1tgC32MOElEl53n8kcJgeU6we_TAuXiy5j4R3kw46kerm32pQa-ymQapgemT3",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{ $('HTTP Request').item.json.content[0].text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        416,
+        0
+      ],
+      "id": "a029c2c1-5195-46a2-9c02-a34fe71d067c",
+      "name": "HTTP Request1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "87f30817-146a-454c-a6c1-b7f9c1073477",
+  "meta": {
+    "instanceId": "ba6b6812fc94f198443729b760d3d1d8fa9f56c2d3aaf88ff27f44e6d6382776"
+  },
+  "id": "sjNgc1GGb3ZB2Nwd",
+  "tags": []
+}

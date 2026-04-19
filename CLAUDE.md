@@ -31,6 +31,27 @@ Boîte de développement & conseil.
 Stack IA auto-hébergée pour piloter KIS'n Code depuis Discord.
 **Lire `docs/specs/` avant toute action.**
 
+### Stack active (2026-04-19)
+
+| Service | Image | Accès |
+|---------|-------|-------|
+| Traefik | traefik:v3.2 | http://traefik.kisnlab.local |
+| Postgres+pgvector | pgvector/pgvector:pg16 | port 5432 (interne) |
+| Redis | redis:7-alpine | port 6379 (interne) |
+| OpenClaw | alpine/openclaw:2026.4.15 | http://openclaw.kisnlab.local:18789 |
+| n8n | n8nio/n8n:latest | http://n8n.kisnlab.local |
+| ClickHouse | clickhouse/clickhouse-server:24.12 | port 8123 (interne) |
+| Langfuse v3 | langfuse/langfuse:3 | http://langfuse.kisnlab.local |
+
+### Faits importants sur OpenClaw
+
+- Config active : `OPENCLAW_STATE_DIR=/workspace` → lit `/workspace/openclaw.json`
+- Le vrai schéma est strict — toujours utiliser `openclaw config set` plutôt qu'éditer le JSON à la main
+- Auth-profiles stocké dans `config/openclaw/agents/` (gitignore, contient la clé API)
+- Modèle actif : `anthropic/claude-haiku-4-5-20251001` (claude-opus-4-7 indisponible sur le tier actuel)
+- Discord configuré via guilds allowlist — `requireMention: false`
+- Plugin webhooks activé sur `/plugins/webhooks/n8n` (secret via `OPENCLAW_WEBHOOK_SECRET`)
+
 ---
 
 ## Règles absolues
@@ -76,6 +97,7 @@ docs/specs/
 ├── STACK.md          → services Docker, ports, dépendances
 ├── DISCORD.md        → serveur, channels, bot, permissions
 ├── OPENCLAW.md       → config, skills, routing LLM, heartbeat
+├── OPENCLAW_API.md   → API gateway, webhooks, MCP (résultat spike)
 ├── N8N.md            → workflows actifs, triggers, webhooks
 ├── DATABASE.md       → schéma Postgres, tables, pgvector
 ├── SKILLS.md         → liste des skills, rôles, LLM assigné
@@ -88,8 +110,20 @@ docs/specs/
 ## Commandes utiles
 
 ```bash
+# Stack
 docker compose up -d
 docker compose logs -f [service]
 docker compose restart [service]
-docker exec -it kisnlab-postgres psql -U kisnlab_admin
+bash scripts/preflight.sh
+
+# Postgres
+docker exec -it kisnlab-postgres psql -U kisnlab_admin -d kisnlab_main
+
+# OpenClaw config
+docker exec kisnlab-openclaw openclaw config get [path]
+docker exec kisnlab-openclaw openclaw config set [path] [value]
+docker exec kisnlab-openclaw openclaw models list
+
+# Backup
+bash scripts/backup-postgres.sh
 ```
