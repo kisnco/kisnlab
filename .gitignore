@@ -22,9 +22,25 @@ Thumbs.db
 # Claude Code local
 .claude/settings.local.json
 
-# OpenClaw cache
+# OpenClaw — données sensibles et état runtime (jamais committé)
 .openclaw-cache/
 config/openclaw/memory/
+config/openclaw/agents/
+config/openclaw/openclaw.json
+config/openclaw/openclaw.json.bak
+config/openclaw/openclaw.json.bak.*
+config/openclaw/openclaw.json.invalid
+config/openclaw/canvas/
+config/openclaw/tasks/
+config/openclaw/identity/
+config/openclaw/logs/
+config/openclaw/credentials/
+config/openclaw/devices/
+config/openclaw/flows/
+config/openclaw/update-check.json
+
+# ClickHouse (config locale, état runtime)
+config/clickhouse/
 
 # n8n exports temporaires
 workflows/exports/
