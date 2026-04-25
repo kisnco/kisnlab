@@ -1,5 +1,7 @@
 # KisnLab — Stack IA locale
 
+> 🤖 **Managed by OpenClaw** — Agent conversationnel pour gérer ce projet
+
 Stack agentique auto-hébergée pour piloter KIS'n Code depuis Discord.
 
 **OpenClaw** (agent conversationnel) + **n8n** (workflows) + **Postgres/pgvector** (data) + **Langfuse** (observabilité) + **Traefik** (proxy)
