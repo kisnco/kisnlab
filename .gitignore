@@ -4,8 +4,9 @@
 *.key
 *.pem
 
-# Docker
+# Docker — bind-mount volumes (données runtime de tous les services)
 data/
+volumes/
 
 # Logs
 logs/

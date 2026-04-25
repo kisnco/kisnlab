@@ -49,7 +49,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_MULTIPLE_DATABASES: "openclaw,n8n,langfuse"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./volumes/postgres:/var/lib/postgresql/data
       - ./config/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -68,7 +68,7 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
-      - redis_data:/data
+      - ./volumes/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
@@ -78,17 +78,63 @@ services:
       - kisnlab-net
 
   # ---------------------------------------------------------------------------
+  # OPENCLAW-DIND — Daemon Docker isolé pour les sandboxes d'OpenClaw
+  # Sécurité : remplace l'accès au socket Docker du host. Si OpenClaw est
+  # compromis (prompt injection), le blast radius est limité à ce container,
+  # pas au Mac. Voir docs/specs/OPENCLAW.md § "Modèle de sécurité".
+  # ---------------------------------------------------------------------------
+  openclaw-dind:
+    image: docker:26-dind
+    container_name: kisnlab-openclaw-dind
+    restart: unless-stopped
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+    volumes:
+      - ./volumes/openclaw-dind-certs-ca:/certs/ca
+      - ./volumes/openclaw-dind-certs-client:/certs/client
+      # /var/lib/docker : storage du daemon Docker (overlay2) — NAMED VOLUME OBLIGATOIRE
+      # Sur macOS, le bind mount vers ./volumes/ ne supporte pas le chown nécessaire
+      # à overlay2 (erreur "failed to Lchown ... permission denied" au pull).
+      # Donc on garde ici un named volume Docker-managed (invisible côté macOS).
+      # Pour purger le sandbox : `docker volume rm kisnlab_openclaw-dind-data`
+      # (après docker compose down).
+      - openclaw-dind-data:/var/lib/docker
+    networks:
+      openclaw-dind-net:
+        # alias 'docker' : les certs TLS auto-générés par dind incluent ce nom
+        # dans leurs SANs. Connecté via tcp://docker:2376, la vérif TLS passe.
+        aliases:
+          - docker
+    healthcheck:
+      test: ["CMD-SHELL", "docker -H tcp://localhost:2376 --tlsverify --tlscacert /certs/server/ca.pem --tlscert /certs/server/cert.pem --tlskey /certs/server/key.pem version >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
   # OPENCLAW — Agent IA conversationnel (Discord)
   # Accès UI : http://openclaw.kisnlab.local
+  # Image    : custom (Dockerfile.openclaw) — base ghcr.io/openclaw pinnée
+  #            par digest + docker CLI + gh CLI
+  # Docker   : parle à openclaw-dind via TCP+TLS (pas au socket du host)
+  # Repo     : monté en lecture seule ; les modifs passent par /workspace/work
+  #            et sortent via gh pr create --draft (workflow GitOps)
   # ---------------------------------------------------------------------------
   openclaw:
-    image: alpine/openclaw:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.openclaw
+    image: kisnlab/openclaw:custom
     container_name: kisnlab-openclaw
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      openclaw-dind:
         condition: service_healthy
     environment:
       # LLM
@@ -108,8 +154,15 @@ services:
       DISCORD_CHANNEL_ALERTES: ${DISCORD_CHANNEL_ALERTES}
       DISCORD_CHANNEL_BRIEFS: ${DISCORD_CHANNEL_BRIEFS}
       DISCORD_CHANNEL_LOGS: ${DISCORD_CHANNEL_LOGS}
-      # GitHub
+      # GitHub — gh CLI lit GH_TOKEN nativement (pas besoin de gh auth login)
       GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GH_TOKEN: ${GITHUB_TOKEN}
+      # Docker — parle à openclaw-dind via TLS, pas au socket du host
+      # Hostname 'docker' (alias réseau) au lieu de 'openclaw-dind' pour matcher
+      # les SANs des certs auto-générés par l'image dind.
+      DOCKER_HOST: tcp://docker:2376
+      DOCKER_TLS_VERIFY: "1"
+      DOCKER_CERT_PATH: /certs/client
       # Workspace
       OPENCLAW_STATE_DIR: /workspace
       OPENCLAW_WEBHOOK_SECRET: ${OPENCLAW_WEBHOOK_SECRET}
@@ -120,11 +173,29 @@ services:
     volumes:
       - ./config/openclaw:/workspace
       - ./skills:/workspace/skills
-      - openclaw_data:/data
-      - /var/run/docker.sock:/var/run/docker.sock
-      - .:/repo/kisnlab
+      - ./volumes/openclaw:/data
+      # Agent workspace (bootstrap files USER.md, SOUL.md, AGENTS.md, etc. injectés
+      # dans le system prompt). Bind-mounté pour persister les édits manuels.
+      - ./volumes/openclaw-agent-workspace:/home/node/.openclaw/workspace
+      # Repo monté en LECTURE SEULE — les modifs passent par /workspace/work + PR GitOps
+      - .:/repo/kisnlab:ro
+      # Workspace de travail jetable (git clone, build, test) — séparé du repo
+      - ./volumes/openclaw-workspace:/workspace/work
+      # Certs TLS pour parler à openclaw-dind (read-only)
+      - ./volumes/openclaw-dind-certs-client:/certs/client:ro
     networks:
       - kisnlab-net
+      - openclaw-dind-net
+    # Hardening minimal — les capabilities et limites de ressources réduisent
+    # le blast radius en cas de compromission. read_only: true et user override
+    # sont volontairement laissés pour une itération hardening dédiée (cf. plan).
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: 2g
+    cpus: "2.0"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.openclaw.rule=Host(`openclaw.kisnlab.local`)"
@@ -172,7 +243,7 @@ services:
       DISCORD_WEBHOOK_LOGS: ${DISCORD_WEBHOOK_LOGS}
       DISCORD_WEBHOOK_ADMIN: ${DISCORD_WEBHOOK_ADMIN}
     volumes:
-      - n8n_data:/home/node/.n8n
+      - ./volumes/n8n:/home/node/.n8n
       - ./workflows:/workflows
     networks:
       - kisnlab-net
@@ -193,7 +264,7 @@ services:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
     volumes:
-      - clickhouse_data:/var/lib/clickhouse
+      - ./volumes/clickhouse:/var/lib/clickhouse
       - ./config/clickhouse/config.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
@@ -283,18 +354,31 @@ services:
       - kisnlab-net
 
 # =============================================================================
-# VOLUMES — Données persistantes (survivent aux docker compose down)
+# VOLUMES
+# La quasi-totalité des volumes sont des bind mounts vers ./volumes/<name>/
+# (visibles depuis macOS, gitignored). Une seule exception : openclaw-dind-data
+# qui doit rester un named volume Docker-managed à cause d'overlay2 sur macOS.
+#
+# Bind mounts dans ./volumes/ :
+#   ./volumes/postgres                   → kisnlab-postgres        : /var/lib/postgresql/data
+#   ./volumes/redis                      → kisnlab-redis           : /data
+#   ./volumes/openclaw                   → kisnlab-openclaw        : /data
+#   ./volumes/openclaw-workspace         → kisnlab-openclaw        : /workspace/work
+#   ./volumes/openclaw-dind-certs-ca     → kisnlab-openclaw-dind   : /certs/ca
+#   ./volumes/openclaw-dind-certs-client → kisnlab-openclaw-dind   : /certs/client
+#                                          kisnlab-openclaw        : /certs/client (RO)
+#   ./volumes/n8n                        → kisnlab-n8n             : /home/node/.n8n
+#   ./volumes/clickhouse                 → kisnlab-clickhouse      : /var/lib/clickhouse
+#
+# Named volume Docker-managed :
+#   openclaw-dind-data → /var/lib/docker (overlay2 storage de la DinD)
 # =============================================================================
 volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
-  openclaw_data:
-    driver: local
-  n8n_data:
-    driver: local
-  clickhouse_data:
+  # Storage du daemon Docker dans la DinD (sandbox d'exécution OpenClaw).
+  # Forcément un named volume : overlay2 ne fonctionne pas en bind mount sur macOS.
+  # À purger périodiquement : `docker volume rm kisnlab_openclaw-dind-data`
+  # (faire `docker compose down openclaw-dind` avant).
+  openclaw-dind-data:
     driver: local
 
 # =============================================================================
@@ -304,3 +388,8 @@ networks:
   kisnlab-net:
     driver: bridge
     name: kisnlab-net
+  # Réseau dédié OpenClaw <-> DinD : isolé de kisnlab-net pour éviter la
+  # latéralisation depuis la DinD vers postgres, redis, etc.
+  openclaw-dind-net:
+    driver: bridge
+    name: openclaw-dind-net

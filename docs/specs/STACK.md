@@ -18,7 +18,8 @@ Accès via domaines `.kisnlab.local` routés par Traefik.
 | **Traefik** | `traefik:v3.2` | Reverse proxy, routing par domaine | `http://traefik.kisnlab.local` |
 | **Postgres** | `pgvector/pgvector:pg16` | Base relationnelle + vectorielle | interne uniquement |
 | **Redis** | `redis:7-alpine` | Queue et cache pour n8n | interne uniquement |
-| **OpenClaw** | `openclaw/openclaw:latest` | Agent IA conversationnel Discord | `http://openclaw.kisnlab.local` |
+| **OpenClaw** | `kisnlab/openclaw:custom` (build local — voir `Dockerfile.openclaw`) | Agent IA conversationnel Discord | `http://openclaw.kisnlab.local` |
+| **OpenClaw-DinD** | `docker:26-dind` | Daemon Docker isolé (sandbox d'exécution OpenClaw) | interne uniquement |
 | **n8n** | `n8nio/n8n:latest` | Workflows automatisés | `http://n8n.kisnlab.local` |
 | **Langfuse** | `langfuse/langfuse:latest` | Observabilité LLM | `http://langfuse.kisnlab.local` |
 
@@ -39,32 +40,48 @@ Accès via domaines `.kisnlab.local` routés par Traefik.
 
 ```
 kisnlab-net (bridge)
-└── tous les services communiquent via hostname Docker
-    ex: postgres → redis → openclaw → n8n → langfuse
+└── tous les services métier (postgres, redis, openclaw, n8n, langfuse, ...)
+
+openclaw-dind-net (bridge, isolé)
+└── openclaw ↔ openclaw-dind uniquement
+    objectif : éviter qu'une compromission de la DinD parle à postgres/redis
 ```
+
+OpenClaw est dual-homed sur les deux réseaux : `kisnlab-net` (pour postgres/redis/langfuse) et `openclaw-dind-net` (pour parler à la DinD via TCP+TLS).
 
 ---
 
 ## Volumes persistants
 
-| Volume | Service | Contenu |
-|--------|---------|---------|
-| `postgres_data` | Postgres | Données BDD (survit aux `docker compose down`) |
-| `redis_data` | Redis | Queue persistante n8n |
-| `openclaw_data` | OpenClaw | Cache et données internes |
-| `n8n_data` | n8n | Credentials, workflows, executions |
+Tous les volumes sont des **bind mounts** vers `./volumes/<name>/` (gitignored). Permet l'inspection directe depuis macOS et facilite le backup.
+
+| Chemin host | Service | Contenu |
+|-------------|---------|---------|
+| `./volumes/postgres` | Postgres | Données BDD (3 databases : openclaw, n8n, langfuse) |
+| `./volumes/redis` | Redis | Queue persistante n8n |
+| `./volumes/openclaw` | OpenClaw | Cache et données internes (`/data`) |
+| `./volumes/n8n` | n8n | Credentials, workflows, executions |
+| `./volumes/clickhouse` | ClickHouse | Données Langfuse (analytics) |
+| `./volumes/openclaw-dind-certs-ca` | OpenClaw-DinD | Certs TLS CA auto-générés par dind |
+| `./volumes/openclaw-dind-certs-client` | OpenClaw-DinD ↔ OpenClaw | Certs TLS client (RO côté openclaw) |
+| `./volumes/openclaw-dind-data` | OpenClaw-DinD | Storage du daemon (images, builds, containers du sandbox) — **à purger périodiquement** : `docker exec kisnlab-openclaw-dind docker system prune -af` |
+| `./volumes/openclaw-workspace` | OpenClaw | Workspace de travail jetable (clones git, builds) |
+
+> ⚠️ **DinD sur macOS** : si `openclaw-dind` ne démarre pas (logs `overlay2: failed to mount`), `./volumes/openclaw-dind-data` est probablement incompatible avec overlay2 sur ta version de Docker Desktop. Solution : repasser ce volume en named volume Docker (cf. commentaire dans `docker-compose.yml`).
 
 ---
 
 ## Dépendances de démarrage
 
 ```
-Postgres (healthy) ─┬─→ OpenClaw
-                    └─→ n8n
-                    └─→ Langfuse
+Postgres (healthy) ──────┬─→ OpenClaw
+                         └─→ n8n
+                         └─→ Langfuse
 
-Redis (healthy) ────┬─→ OpenClaw
-                    └─→ n8n
+Redis (healthy) ─────────┬─→ OpenClaw
+                         └─→ n8n
+
+OpenClaw-DinD (healthy) ──→ OpenClaw   (TCP+TLS sur :2376, certs auto)
 ```
 
 ---

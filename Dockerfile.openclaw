@@ -1,0 +1,62 @@
+# =============================================================================
+# Dockerfile.openclaw — image OpenClaw custom KisnLab
+# =============================================================================
+# Pourquoi cette image custom ?
+# - L'image upstream `ghcr.io/openclaw/openclaw` ne contient pas `docker` CLI
+#   ni `gh` CLI, dont OpenClaw a besoin pour parler à la DinD et ouvrir des PRs.
+# - On part de la source officielle pinnée par digest (pas de `:latest`, pas de
+#   mirror Docker Hub) pour garantir la reproductibilité et la chaîne d'approvi-
+#   sionnement.
+# - Couche mince : on ajoute uniquement les deux CLIs depuis leurs dépôts apt
+#   officiels signés. Pas de modification du code OpenClaw.
+#
+# Mise à jour du digest : voir scripts/update-openclaw-image.sh (à venir) ou
+# `docker pull ghcr.io/openclaw/openclaw:<version>` puis
+# `docker inspect ghcr.io/openclaw/openclaw:<version> --format '{{.RepoDigests}}'`
+# =============================================================================
+
+# Source : https://github.com/openclaw/openclaw — version 2026.4.15
+FROM ghcr.io/openclaw/openclaw@sha256:9d5f1dfbd5deedc37706c78f745b958ffbe9b4f20840cfb4d49c617a50326902
+
+USER root
+
+# Installation docker-ce-cli (dépôt Docker officiel signé) + gh CLI (dépôt GitHub officiel signé)
+# Pas de docker-engine, juste le client : c'est OpenClaw qui parle à la DinD via TCP+TLS.
+RUN set -eux; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg; \
+    install -m 0755 -d /etc/apt/keyrings; \
+    \
+    # Docker official key + repository
+    curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc; \
+    chmod a+r /etc/apt/keyrings/docker.asc; \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" \
+        > /etc/apt/sources.list.d/docker.list; \
+    \
+    # GitHub CLI official key + repository
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+        -o /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
+    chmod a+r /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+        > /etc/apt/sources.list.d/github-cli.list; \
+    \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        docker-ce-cli \
+        docker-compose-plugin \
+        gh; \
+    \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Pré-créer le home OpenClaw avec ownership node:node. Sinon, Docker crée
+# /home/node/.openclaw en root:root à la volée lors du bind-mount de
+# workspace/, et l'agent (uid 1000) ne peut plus écrire ses fichiers
+# .exec-approvals.*.tmp à la racine du dossier — ce qui wedge tous les
+# tool calls (exec, edit) en EACCES. Le chown runtime est bloqué par
+# cap_drop: ALL + no-new-privileges, donc le fix doit être dans l'image.
+RUN install -d -o node -g node -m 0755 /home/node/.openclaw
+
+# Revenir au user non-root livré par l'image OpenClaw upstream
+USER node

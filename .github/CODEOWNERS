@@ -1,0 +1,17 @@
+# CODEOWNERS — KisnLab
+# Doc : https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Toute PR sur ce repo doit être reviewée par les owners listés ici avant merge.
+# Combiné avec branch protection (require review from CODEOWNERS) sur main + dev,
+# ça empêche OpenClaw (ou n'importe qui) de merger sans validation humaine.
+#
+# Owner principal : @kisnco
+
+* @kisnco
+
+# Zones sensibles : double review recommandée plus tard si l'équipe grandit.
+# /docker-compose.yml      @kisnco
+# /Dockerfile.openclaw     @kisnco
+# /.github/                @kisnco
+# /scripts/                @kisnco
+# /docs/specs/             @kisnco
