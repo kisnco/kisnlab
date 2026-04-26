@@ -24,7 +24,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate docker-compose.yml
         run: |
-          docker-compose config > /dev/null
+          # `docker compose` (V2 plugin) — `docker-compose` V1 hyphenated n'est
+          # plus disponible sur ubuntu-latest. On valide la syntaxe ; les vars
+          # manquantes deviennent des chaînes vides (warning, pas error).
+          docker compose config > /dev/null
           echo "✅ docker-compose.yml is valid"
 
   json-validate:
