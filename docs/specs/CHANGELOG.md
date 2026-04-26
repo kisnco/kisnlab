@@ -8,6 +8,14 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-04-26
 
+### Skill — `strategie-veille` créé
+
+Skill OpenClaw P2 du backlog `SKILLS.md` livré. Veille quotidienne sur 4 axes (IA & agentique en focus, dev/IT, business/FR pour entrepreneurs IT, sécurité). Mode actif (l'agent fetche lui-même via le plugin browser), digest narratif court, ton Kael (cynique sec, factuel d'abord). Triggers : `veille`, `veille IA`, `veille dev`, `veille business`, `veille sécu`, `quoi de neuf en [sujet]` dans `#strategie`.
+
+Sources V1 : Anthropic News, OpenAI News, Hugging Face, The Batch, Latent Space, HN, DEV.to, GitHub Trending, Maddyness, Frenchweb, BFM Tech, The Hacker News, Krebs, ANSSI, Snyk. **Source X/Twitter reportée V2** (token API X non configuré).
+
+Pas encore de workflow n8n CRON matin associé — création conditionnelle après validation manuelle du skill seul (cf. feedback_external_actions).
+
 ### CI — Job gate par workflow GitHub Actions
 
 `scripts/setup-branch-protection.sh` attendait des contextes de status checks `pr-checks`, `lint`, `healthcheck` qui n'existaient pas — les 3 workflows définissaient plusieurs jobs aux noms différents. Activer la branch protection en l'état aurait bloqué toutes les PR éternellement.

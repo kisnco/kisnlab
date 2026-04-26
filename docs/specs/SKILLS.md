@@ -29,10 +29,13 @@ approval: required   # uniquement si action externe (envoi, publication...)
 |-------|---------|-----|-------------|------|
 | `dev-reviewer` | #dev | Sonnet | Non | ✅ Prêt |
 | `dev-architect` | #dev | Sonnet | Non | ✅ Prêt |
+| `dev-project-manager` | #dev | Sonnet | Non | ✅ Prêt |
+| `github-dashboard` | #dev | Haiku | Non | ✅ Prêt |
 | `commercial-devis` | #commercial | Sonnet | ✅ Oui | ✅ Prêt |
 | `admin-facturation` | #admin | Sonnet | ✅ Oui | ✅ Prêt |
 | `comm-linkedin` | #comm | Haiku | ✅ Oui | ✅ Prêt |
 | `strategie-conseiller` | #strategie | Sonnet | ✅ Oui | ✅ Prêt |
+| `strategie-veille` | #strategie | Haiku | Non | ✅ Prêt |
 
 ---
 
@@ -73,7 +76,6 @@ approval: required   # uniquement si action externe (envoi, publication...)
 
 | Skill | Description | LLM | Priorité |
 |-------|-------------|-----|----------|
-| `strategie-veille` | Résumé de veille tech et marché | Haiku | P2 |
 | `strategie-pricing` | Analyse et recommandation de tarifs | Sonnet | P2 |
 | `strategie-bizdev` | Identification d'opportunités business | Sonnet | P3 |
 
