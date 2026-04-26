@@ -303,10 +303,9 @@ services:
       SALT: ${LANGFUSE_SALT}
       TELEMETRY_ENABLED: "false"
       LANGFUSE_DEFAULT_PROJECT_ROLE: VIEWER
-      LANGFUSE_INIT_ORG_ID: kisnlab
-      LANGFUSE_INIT_ORG_NAME: KisnLab
-      LANGFUSE_INIT_PROJECT_ID: kisnlab-main
-      LANGFUSE_INIT_PROJECT_NAME: KisnLab
+      # LANGFUSE_INIT_* retiré : créait un org/projet vide en doublon de
+      # l'org "KIS'n Code" + projet "KIS'n Lab" déjà créés via l'UI au setup.
+      # Si nouveau bootstrap nécessaire, recréer via l'UI ou l'API REST.
       LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "false"
       LANGFUSE_S3_MEDIA_UPLOAD_ENABLED: "false"
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: "disabled"

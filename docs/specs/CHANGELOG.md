@@ -6,6 +6,35 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ---
 
+## 2026-04-26
+
+### CI — Job gate par workflow GitHub Actions
+
+`scripts/setup-branch-protection.sh` attendait des contextes de status checks `pr-checks`, `lint`, `healthcheck` qui n'existaient pas — les 3 workflows définissaient plusieurs jobs aux noms différents. Activer la branch protection en l'état aurait bloqué toutes les PR éternellement.
+
+**Fix** : chaque workflow expose maintenant un job final `pr-checks` / `lint` / `healthcheck` qui dépend de tous ses sous-jobs (`if: always()` + agrégation via `contains(needs.*.result, 'failure')`). La branch protection cible un seul check par workflow.
+
+Bonus : `lint.yml` migré de `docker-compose` (V1 hyphenated, plus dispo sur ubuntu-latest) vers `docker compose` (V2 plugin).
+
+### CI — Branch protection activée sur `main` et `dev`
+
+Via `scripts/setup-branch-protection.sh` : 1 review requise (CODEOWNERS), status checks `pr-checks`/`lint`/`healthcheck` obligatoires, force push interdit, deletions interdites, conversation resolution requise. `enforce_admins=false` (Mélodie peut bypass via UI ; OpenClaw, sans droits admin, doit passer par PR).
+
+### Cleanup — Workflow n8n cassé + projet Langfuse doublon
+
+- **n8n** : `admin-relancer-factures` importé via CLI s'était retrouvé avec un id vide en DB (bug n8n CLI). Cleanup SQL : `DELETE FROM shared_workflow WHERE "workflowId"=''; DELETE FROM workflow_entity WHERE id=''` — 2 rows. Reste 2 workflows valides (`dev-generer-brief-hebdo`, `openclaw-langfuse-tracker`).
+- **Langfuse** : org `kisnlab` + projet `kisnlab-main` créés par les `LANGFUSE_INIT_*` du compose étaient en doublon (vides) de l'org `KIS'n Code` + projet `KIS'n Lab` créés manuellement via l'UI. Org `kisnlab` supprimée (CASCADE → projet `kisnlab-main` + ses tables enfants). Variables `LANGFUSE_INIT_*` retirées du `docker-compose.yml` pour ne pas recréer le doublon au prochain start.
+
+### Fix — Réseau OpenClaw perdu au `--force-recreate`
+
+Lors du fix exec wedge (rebuild OpenClaw), le `docker compose up -d --force-recreate openclaw` n'avait rattaché que `openclaw-dind-net`, perdant `kisnlab-net`. Conséquence : OpenClaw ne pouvait plus joindre Langfuse, Postgres, Redis... pour traces et webhooks. Réparé via `docker network connect kisnlab-net kisnlab-openclaw`. Le compose déclare bien les 2 réseaux ; un `docker compose up -d` (sans force-recreate) suffit pour réattacher correctement.
+
+### Observabilité — Config OTel OpenClaw → Langfuse v3 (en cours)
+
+`diagnostics.otel.*` paramétré dans `openclaw.json` : endpoint `http://langfuse-web:3000/api/public/otel`, protocol `http/protobuf`, header `Authorization: Basic <base64(public:secret)>`, serviceName `openclaw`, traces `true`, sampleRate `1`. Endpoint Langfuse OTLP testé avec auth manuel : `HTTP 200`. Gateway redémarré.
+
+**Bloqueur** : aucune trace n'arrive dans `traces`/`observations` ClickHouse après un agent run de test. Aucun log d'init OTel/exporter dans les logs OpenClaw au boot. Hypothèse : la section `diagnostics.otel.*` est déclarative dans le schema mais non câblée côté runtime, ou nécessite des env vars OTEL_* standard. À investiguer dans une prochaine session.
+
 ## 2026-04-25
 
 ### Fix — OpenClaw exec wedge : `/home/node/.openclaw/` root-owned
