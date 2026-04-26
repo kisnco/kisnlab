@@ -89,3 +89,19 @@ jobs:
         run: |
           echo "🚀 Services configured:"
           grep "^  [a-z].*:$" docker-compose.yml | sed 's/.*: /  ✓ /' || true
+
+  # Gate unique pour la branch protection. Le contexte de status check sera "healthcheck".
+  healthcheck:
+    name: healthcheck
+    runs-on: ubuntu-latest
+    needs: [repository-health, dependencies-check]
+    if: always()
+    steps:
+      - name: Aggregate healthcheck results
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]] || \
+             [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "❌ One or more healthcheck jobs failed or were cancelled"
+            exit 1
+          fi
+          echo "✅ All healthcheck jobs passed"

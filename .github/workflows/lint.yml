@@ -83,3 +83,21 @@ jobs:
               exit 1
             fi
           done
+
+  # Gate unique pour la branch protection. Le contexte de status check sera "lint".
+  # Fail si n'importe quel sous-job a fail/cancelled. Permet d'ajouter des sous-jobs
+  # plus tard sans toucher la branch protection.
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    needs: [shellcheck, docker-compose, json-validate, skills-validate, env-validation]
+    if: always()
+    steps:
+      - name: Aggregate lint results
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]] || \
+             [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "❌ One or more lint jobs failed or were cancelled"
+            exit 1
+          fi
+          echo "✅ All lint jobs passed"

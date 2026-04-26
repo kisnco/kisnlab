@@ -78,3 +78,19 @@ jobs:
               echo "  ⚠️  $commit (consider: feat:, fix:, docs:, etc.)"
             fi
           done
+
+  # Gate unique pour la branch protection. Le contexte de status check sera "pr-checks".
+  pr-checks:
+    name: pr-checks
+    runs-on: ubuntu-latest
+    needs: [pr-metadata, changed-files, commit-messages]
+    if: always()
+    steps:
+      - name: Aggregate PR check results
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]] || \
+             [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "❌ One or more PR checks failed or were cancelled"
+            exit 1
+          fi
+          echo "✅ All PR checks passed"
