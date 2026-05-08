@@ -8,12 +8,12 @@
 #   ./scripts/gh-app-bot.sh token                  # affiche juste le token
 #
 # Variable d'environnement :
-#   GH_APP_NAME — sélectionne l'App (défaut : kisnco-claude-code)
+#   GH_APP_NAME — sélectionne l'App (défaut : kisnlab-claude-code)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_NAME="${GH_APP_NAME:-kisnco-claude-code}"
+APP_NAME="${GH_APP_NAME:-kisnlab-claude-code}"
 
 usage() {
   cat <<EOF

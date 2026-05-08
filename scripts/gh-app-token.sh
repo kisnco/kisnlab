@@ -2,8 +2,8 @@
 # Génère un installation token GitHub App (durée de vie : 1h)
 #
 # Usage:
-#   ./scripts/gh-app-token.sh                       # utilise APP_NAME par défaut
-#   ./scripts/gh-app-token.sh kisnco-claude-code    # utilise une App spécifique
+#   ./scripts/gh-app-token.sh                        # utilise APP_NAME par défaut
+#   ./scripts/gh-app-token.sh kisnlab-claude-code    # utilise une App spécifique
 #
 # Lit la config dans ~/.claude/secrets/<APP_NAME>.env :
 #   GH_APP_ID=...
@@ -15,7 +15,7 @@
 
 set -euo pipefail
 
-APP_NAME="${1:-${GH_APP_NAME:-kisnco-claude-code}}"
+APP_NAME="${1:-${GH_APP_NAME:-kisnlab-claude-code}}"
 SECRETS_DIR="${HOME}/.claude/secrets"
 CONFIG_FILE="${SECRETS_DIR}/${APP_NAME}.env"
 PEM_FILE="${SECRETS_DIR}/${APP_NAME}.private-key.pem"

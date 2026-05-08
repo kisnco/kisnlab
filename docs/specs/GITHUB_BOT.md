@@ -12,17 +12,17 @@
 
 | Agent | App | Statut |
 |---|---|---|
-| Claude Code | `kisnco-claude-code` | ✅ actif (mai 2026) |
-| Codex (futur) | `kisnco-codex` | ⏳ à créer |
-| Autres agents | `kisnco-<nom>` | ⏳ à créer |
+| Claude Code | `kisnlab-claude-code` | ✅ actif (mai 2026) |
+| Codex (futur) | `kisnlab-codex` | ⏳ à créer |
+| Autres agents | `kisnlab-<nom>` | ⏳ à créer |
 
-## App `kisnco-claude-code`
+## App `kisnlab-claude-code`
 
 - **Owner** : `@kisnco`
 - **App ID** : `3643047`
 - **Client ID** : `Iv23liX7q2fuChtkm8NQ`
 - **Installation ID** : `130539343`
-- **Bot login** : `kisnco-claude-code[bot]` (auto-généré par GitHub)
+- **Bot login** : `kisnlab-claude-code[bot]` (auto-généré par GitHub)
 - **Permissions repo** : Contents R+W · Pull requests R+W · Issues R+W · Workflows R+W · Metadata R
 - **Webhooks** : désactivés (non nécessaires pour le use-case)
 - **Repos accessibles** : `All repositories` de l'org `kisnco`
@@ -33,8 +33,8 @@
 
 ```
 ~/.claude/secrets/
-├── kisnco-claude-code.env              # APP_ID, INSTALLATION_ID, CLIENT_ID
-└── kisnco-claude-code.private-key.pem  # clé privée RSA téléchargée depuis GitHub
+├── kisnlab-claude-code.env              # APP_ID, INSTALLATION_ID, CLIENT_ID
+└── kisnlab-claude-code.private-key.pem  # clé privée RSA téléchargée depuis GitHub
 ```
 
 Permissions : `chmod 700` sur le dossier, `chmod 600` sur les fichiers.
@@ -56,7 +56,7 @@ Ces scripts sont **génériques** : changer `GH_APP_NAME` permet de basculer sur
 ./scripts/gh-app-bot.sh push -u origin <branche>
 ```
 
-Le wrapper convertit `git@github.com:kisnco/kisnlab.git` en `https://x-access-token:<token>@github.com/...` à la volée — sans toucher la config locale ni l'origin SSH (qui reste utilisable pour les push humains).
+Le wrapper override `remote.origin.url` en HTTPS le temps de la commande et injecte un credential helper inline avec le token — sans toucher la config locale ni l'origin SSH (qui reste utilisable pour les push humains). Tous les flags `git push` standards (`-u`, `-f`, `--tags`…) sont préservés.
 
 ### Créer une PR en tant que bot
 
@@ -84,7 +84,7 @@ Le label `claude-generated` est ajouté automatiquement (convention projet).
 ## Convention de commit/PR
 
 - **Auteur des commits** : reste l'humain (Mélodie / collaborateur). Le bot ne change que **qui pousse** et **qui ouvre la PR**.
-- **PR opener** : `kisnco-claude-code[bot]` → permet l'approbation par l'humain.
+- **PR opener** : `kisnlab-claude-code[bot]` → permet l'approbation par l'humain.
 - **Label** : toute PR ouverte par le bot porte `claude-generated` (auto-ajouté par `pr-create`).
 
 ## Rotation de la clé privée
@@ -92,15 +92,15 @@ Le label `claude-generated` est ajouté automatiquement (convention projet).
 Si la clé est compromise :
 
 1. GitHub → Settings de l'App → **Generate a new private key**
-2. Remplacer `~/.claude/secrets/kisnco-claude-code.private-key.pem`
+2. Remplacer `~/.claude/secrets/kisnlab-claude-code.private-key.pem`
 3. Révoquer l'ancienne clé sur la même page
 
 L'`APP_ID` et `INSTALLATION_ID` ne changent pas.
 
 ## Ajouter un nouvel agent
 
-1. Créer une nouvelle App `kisnco-<agent>` (mêmes permissions)
+1. Créer une nouvelle App `kisnlab-<agent>` (mêmes permissions)
 2. Installer sur "All repositories"
-3. Télécharger le `.pem` → `~/.claude/secrets/kisnco-<agent>.private-key.pem`
-4. Créer `~/.claude/secrets/kisnco-<agent>.env` (APP_ID + INSTALLATION_ID)
-5. Utiliser : `GH_APP_NAME=kisnco-<agent> ./scripts/gh-app-bot.sh ...`
+3. Télécharger le `.pem` → `~/.claude/secrets/kisnlab-<agent>.private-key.pem`
+4. Créer `~/.claude/secrets/kisnlab-<agent>.env` (APP_ID + INSTALLATION_ID)
+5. Utiliser : `GH_APP_NAME=kisnlab-<agent> ./scripts/gh-app-bot.sh ...`

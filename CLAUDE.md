@@ -111,7 +111,7 @@ docs/specs/
 
 ## Workflow git/PR — IMPORTANT pour Claude Code
 
-Toute PR ouverte par Claude Code DOIT passer par le bot `kisnco-claude-code[bot]` (sinon Mélodie ne peut pas l'approuver). Voir `docs/specs/GITHUB_BOT.md`.
+Toute PR ouverte par Claude Code DOIT passer par le bot `kisnlab-claude-code[bot]` (sinon Mélodie ne peut pas l'approuver). Voir `docs/specs/GITHUB_BOT.md`.
 
 ```bash
 # 1. Commit normalement (auteur = humain, c'est OK)
