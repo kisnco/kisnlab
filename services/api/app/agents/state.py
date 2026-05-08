@@ -11,7 +11,8 @@ Two layers:
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+import operator
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -59,7 +60,11 @@ class PerspectiveOpinion(BaseModel):
 
 class ReviewerState(BaseModel):
     task: str
-    perspectives: list[PerspectiveOpinion] = Field(default_factory=list)
+    repo: Optional[str] = None
+    pr_number: Optional[int] = None
+    diff: str = ""
+    # ``operator.add`` reducer merges parallel writes from the 3 perspective nodes.
+    perspectives: Annotated[list[PerspectiveOpinion], operator.add] = Field(default_factory=list)
     response: str = ""
 
 

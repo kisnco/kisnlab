@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.agents.dev import build_dev_graph
-from app.agents.state import AgentRequest, AgentResponse, DevState
+from app.agents.reviewer import build_reviewer_graph, reviewer_metadata
+from app.agents.state import AgentRequest, AgentResponse, DevState, ReviewerState
 from app.auth import verify_token
 
 router = APIRouter(
@@ -11,10 +12,29 @@ router = APIRouter(
 )
 
 dev_graph = build_dev_graph()
+reviewer_graph = build_reviewer_graph()
+
+
+def _read(result, field: str):
+    """LangGraph returns either a dict or the state object; normalize."""
+    return result[field] if isinstance(result, dict) else getattr(result, field)
 
 
 @router.post("/dev/run", response_model=AgentResponse)
 def run_dev_agent(req: AgentRequest) -> AgentResponse:
     result = dev_graph.invoke(DevState(task=req.task))
-    response_text = result["response"] if isinstance(result, dict) else result.response
-    return AgentResponse(agent="dev", response=response_text)
+    return AgentResponse(agent="dev", response=_read(result, "response"))
+
+
+@router.post("/reviewer/run", response_model=AgentResponse)
+def run_reviewer_agent(req: AgentRequest) -> AgentResponse:
+    try:
+        result = reviewer_graph.invoke(ReviewerState(task=req.task))
+    except ValueError as exc:
+        # PR ref parse error → 422 (semantic), not 500.
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    return AgentResponse(
+        agent="reviewer",
+        response=_read(result, "response"),
+        metadata=reviewer_metadata(_read(result, "perspectives")),
+    )
