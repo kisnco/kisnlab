@@ -111,6 +111,27 @@ deny:  browser, gateway, cron
 
 ---
 
+## Délégation à FastAPI / LangGraph
+
+Depuis la Phase D de la migration agentique (mai 2026), OpenClaw peut déléguer une tâche technique à l'agent `dev` hébergé dans `kisnlab-api` (FastAPI + LangGraph). Voir `FASTAPI.md` et `LANGGRAPH.md`.
+
+- **Skill** : `delegate-to-api` (channel `#dev`, LLM Haiku, pas d'approval — appel inter-service interne au stack)
+- **Trigger** : "délègue dev : [...]", "agent dev : [...]", "demande à dev de [...]"
+- **Action** : `curl POST http://kisnlab-api:8000/agents/dev/run` avec header `Authorization: Bearer ${KISNLAB_API_TOKEN}` et body JSON `{"task": "..."}`
+- **Réponse** : posté brut dans le channel (pas de reformatage)
+
+### Variables d'env nécessaires
+
+Ajoutées dans `services.openclaw.environment` du `docker-compose.yml` :
+
+| Variable | Usage |
+|----------|-------|
+| `KISNLAB_API_TOKEN` | Bearer pour authentifier les appels OpenClaw → kisnlab-api |
+
+OpenClaw reste l'agent conversationnel principal sur Discord — la délégation est une capacité ajoutée, pas un remplacement de ses skills existants.
+
+---
+
 ## Modèle de sécurité Docker + GitOps
 
 > Voir aussi : `Dockerfile.openclaw`, `docker-compose.yml` services `openclaw` et `openclaw-dind`.

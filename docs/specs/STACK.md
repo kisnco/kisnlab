@@ -23,6 +23,7 @@ Accès via domaines `.kisnlab.local` routés par Traefik.
 | **n8n** | `n8nio/n8n:latest` | Workflows automatisés | `http://n8n.kisnlab.local` |
 | **RSSHub** | `diygod/rsshub:latest` | Convertit X, GitHub, blogs en flux RSS pour n8n | interne uniquement |
 | **Langfuse** | `langfuse/langfuse:latest` | Observabilité LLM | `http://langfuse.kisnlab.local` |
+| **KisnLab API** | `python:3.12-slim` (build local) | FastAPI — bridge OpenClaw ↔ LangGraph (Phase A : plomberie) | `http://api.kisnlab.local` |
 
 ---
 
@@ -95,6 +96,7 @@ OpenClaw-DinD (healthy) ──→ OpenClaw   (TCP+TLS sur :2376, certs auto)
 127.0.0.1   n8n.kisnlab.local
 127.0.0.1   langfuse.kisnlab.local
 127.0.0.1   traefik.kisnlab.local
+127.0.0.1   api.kisnlab.local
 ```
 
 ---
