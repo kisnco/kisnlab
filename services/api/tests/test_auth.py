@@ -34,7 +34,10 @@ def test_post_with_valid_token_passes_auth(monkeypatch, enable_auth):
             headers={"Authorization": "Bearer expected-token"},
         )
         assert response.status_code == 200
-        assert response.json() == {"agent": "dev", "response": "stub"}
+        body = response.json()
+        assert body["agent"] == "dev"
+        assert body["response"] == "stub"
+        assert body["metadata"] == {}
 
 
 def test_health_does_not_require_auth(enable_auth, monkeypatch):

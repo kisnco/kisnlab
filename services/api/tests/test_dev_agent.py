@@ -12,6 +12,7 @@ client = TestClient(app)
 def test_dev_agent_unit_with_mock():
     """Le graphe doit retourner la réponse finale de l'agent ReAct (mock)."""
     from app.agents.dev import build_dev_graph
+    from app.agents.state import DevState
 
     with patch("app.agents.dev.create_react_agent") as mock_react, \
          patch("app.agents.dev.ChatAnthropic") as mock_llm_class:
@@ -22,9 +23,11 @@ def test_dev_agent_unit_with_mock():
         mock_react.return_value = mock_react_agent
 
         graph = build_dev_graph()
-        result = graph.invoke({"task": "refactor X", "response": ""})
+        result = graph.invoke(DevState(task="refactor X"))
 
-        assert result["response"] == "mocked claude reply"
+        # LangGraph returns a dict-shaped state for Pydantic StateGraph too.
+        response = result["response"] if isinstance(result, dict) else result.response
+        assert response == "mocked claude reply"
         mock_llm_class.assert_called_once()
         mock_react.assert_called_once()
 
@@ -32,6 +35,7 @@ def test_dev_agent_unit_with_mock():
 def test_dev_agent_flattens_block_content():
     """Si Claude renvoie content sous forme de blocks (tool calling), on extrait le texte."""
     from app.agents.dev import build_dev_graph
+    from app.agents.state import DevState
 
     with patch("app.agents.dev.create_react_agent") as mock_react, \
          patch("app.agents.dev.ChatAnthropic"):
@@ -42,13 +46,14 @@ def test_dev_agent_flattens_block_content():
         mock_react.return_value = mock_agent
 
         graph = build_dev_graph()
-        result = graph.invoke({"task": "test", "response": ""})
+        result = graph.invoke(DevState(task="test"))
 
-        assert result["response"] == "bloc1 bloc2"
+        response = result["response"] if isinstance(result, dict) else result.response
+        assert response == "bloc1 bloc2"
 
 
 def test_run_dev_agent_endpoint_with_mock():
-    """POST /agents/dev/run renvoie agent + response (graphe mocké)."""
+    """POST /agents/dev/run renvoie l'enveloppe AgentResponse (graphe mocké)."""
     with patch("app.routers.agents.dev_graph") as mock_graph:
         mock_graph.invoke.return_value = {
             "task": "test",
@@ -57,7 +62,10 @@ def test_run_dev_agent_endpoint_with_mock():
         response = client.post("/agents/dev/run", json={"task": "test"})
 
         assert response.status_code == 200
-        assert response.json() == {"agent": "dev", "response": "stubbed response"}
+        body = response.json()
+        assert body["agent"] == "dev"
+        assert body["response"] == "stubbed response"
+        assert body["metadata"] == {}
 
 
 def test_run_dev_agent_endpoint_validates_empty_task():
@@ -73,10 +81,10 @@ def test_run_dev_agent_endpoint_validates_empty_task():
 def test_dev_agent_integration_real_claude():
     """Appel reel a Claude Haiku, skip si pas de cle."""
     from app.agents.dev import build_dev_graph
+    from app.agents.state import DevState
 
     graph = build_dev_graph()
-    result = graph.invoke(
-        {"task": "Reponds juste avec le mot 'ok' et rien d'autre.", "response": ""}
-    )
-    assert isinstance(result["response"], str)
-    assert len(result["response"]) > 0
+    result = graph.invoke(DevState(task="Reponds juste avec le mot 'ok' et rien d'autre."))
+    response = result["response"] if isinstance(result, dict) else result.response
+    assert isinstance(response, str)
+    assert len(response) > 0

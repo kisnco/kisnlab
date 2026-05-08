@@ -6,7 +6,17 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ---
 
-## 2026-05-08
+## 2026-05-09
+
+### Phase 1 — Foundation équipe dev multi-agents (PR-1/4)
+
+Plomberie pour passer de l'agent `dev` solo à l'équipe **Dev + Reviewer**. Aucune feature visible côté API/Discord — refacto pure pour préparer les PRs suivantes (Reviewer en sub-graph, Team supervisor, intégration OpenClaw/Discord).
+
+- **`services/api/app/agents/state.py`** : nouveau module qui centralise les contrats Pydantic. Boundary API (`AgentRequest`, `AgentResponse` avec `metadata: dict` pour porter `routed_to` côté team / `severities` côté reviewer) + states internes LangGraph par graphe (`DevState`, `ReviewerState` avec `PerspectiveOpinion`, `TeamState`).
+- **`services/api/app/agents/skills/`** : nouveau dossier de fragments markdown + `_loader.load_skills([...]) -> str` (concat avec séparateur `---`, fail-fast si fragment manquant). Initialise `dev_base.md` et `github_pr_tools.md` extraits du SYSTEM_PROMPT inline.
+- **`services/api/app/agents/dev.py`** : `DevState` passe de `TypedDict` à `BaseModel` (validation gratuite, cohérent avec l'API boundary). System prompt composé via `load_skills(("dev_base", "github_pr_tools"))`. `run_name="dev_agent"` conservé pour Langfuse.
+- **`services/api/app/routers/agents.py`** : `RunRequest`/`RunResponse` locaux supprimés au profit de `AgentRequest`/`AgentResponse` partagés. La route `POST /agents/dev/run` reste wire-compatible (champ `metadata` ajouté, `agent` et `response` inchangés).
+- **Tests** : 50 verts + 1 skipped (intégration Anthropic). Nouveaux : `test_state.py` (10 cas — validation, defaults, severities), `test_skills_loader.py` (7 cas — load, ordre, missing, names invalides). `test_dev_agent.py` adapté à la state shape Pydantic. `test_auth.py` ajusté pour le champ `metadata`.
 
 ### Phase C — tracing Langfuse câblé sur l'agent `dev`
 
