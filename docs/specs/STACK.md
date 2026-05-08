@@ -21,6 +21,7 @@ Accès via domaines `.kisnlab.local` routés par Traefik.
 | **OpenClaw** | `kisnlab/openclaw:custom` (build local — voir `Dockerfile.openclaw`) | Agent IA conversationnel Discord | `http://openclaw.kisnlab.local` |
 | **OpenClaw-DinD** | `docker:26-dind` | Daemon Docker isolé (sandbox d'exécution OpenClaw) | interne uniquement |
 | **n8n** | `n8nio/n8n:latest` | Workflows automatisés | `http://n8n.kisnlab.local` |
+| **RSSHub** | `diygod/rsshub:latest` | Convertit X, GitHub, blogs en flux RSS pour n8n | interne uniquement |
 | **Langfuse** | `langfuse/langfuse:latest` | Observabilité LLM | `http://langfuse.kisnlab.local` |
 
 ---
@@ -79,7 +80,8 @@ Postgres (healthy) ──────┬─→ OpenClaw
                          └─→ Langfuse
 
 Redis (healthy) ─────────┬─→ OpenClaw
-                         └─→ n8n
+                         ├─→ n8n
+                         └─→ RSSHub      (cache DB 2)
 
 OpenClaw-DinD (healthy) ──→ OpenClaw   (TCP+TLS sur :2376, certs auto)
 ```

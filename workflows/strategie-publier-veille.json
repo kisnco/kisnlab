@@ -1,0 +1,92 @@
+{
+  "name": "strategie-publier-veille",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 9 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 0],
+      "id": "a1111111-1111-1111-1111-111111111111",
+      "name": "CRON 9h30 7/7"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Fetch RSS sources via node:http(s) natif (sandbox n8n n'expose pas fetch global).\n// Parse, filter 24h, dedupe, build OpenClaw payload.\n\nconst http = require('node:http');\nconst https = require('node:https');\nconst { URL } = require('node:url');\n\nconst RSSHUB = 'http://kisnlab-rsshub:1200';\nconst WINDOW_MS = 24 * 60 * 60 * 1000;\nconst MAX_ITEMS = 60;\nconst FETCH_TIMEOUT_MS = 10000;\nconst MAX_REDIRECTS = 3;\n\nconst xHandles = [\n  'karpathy', 'simonw', 'swyx', 'ylecun', 'fchollet',\n  'AnthropicAI', 'darioamodei', 'sama', 'clementdelangue', '_akhaliq',\n  'hwchase17', 'goodfellow_ian', 'AlphaSignalAI', 'llama_index', 'le_perceptron'\n];\n\nconst sources = [\n  { url: `${RSSHUB}/anthropic/news`, category: 'ia', source: 'Anthropic News' },\n  { url: `${RSSHUB}/openai/blog`, category: 'ia', source: 'OpenAI Blog' },\n  { url: 'https://huggingface.co/blog/feed.xml', category: 'ia', source: 'Hugging Face' },\n  { url: 'https://www.deeplearning.ai/the-batch/feed/', category: 'ia', source: 'The Batch' },\n  { url: 'https://www.latent.space/feed', category: 'ia', source: 'Latent Space' },\n  { url: 'https://hnrss.org/frontpage', category: 'dev', source: 'Hacker News' },\n  { url: 'https://dev.to/feed', category: 'dev', source: 'DEV.to' },\n  { url: `${RSSHUB}/github/trending/daily/any`, category: 'dev', source: 'GitHub Trending' },\n  { url: 'https://feeds.feedburner.com/symfony/blog', category: 'dev', source: 'Symfony Blog' },\n  { url: 'https://nextjs.org/feed.xml', category: 'dev', source: 'Next.js Blog' },\n  { url: 'https://bun.sh/blog/feed.xml', category: 'dev', source: 'Bun Blog' },\n  { url: 'https://www.maddyness.com/feed/', category: 'business', source: 'Maddyness' },\n  { url: 'https://www.frenchweb.fr/feed', category: 'business', source: 'Frenchweb' },\n  { url: 'https://www.bfmtv.com/rss/tech/', category: 'business', source: 'BFM Tech' },\n  { url: 'https://feeds.feedburner.com/TheHackersNews', category: 'secu', source: 'The Hacker News' },\n  { url: 'https://krebsonsecurity.com/feed/', category: 'secu', source: 'Krebs on Security' },\n  { url: 'https://www.cert.ssi.gouv.fr/feed/', category: 'secu', source: 'ANSSI / CERT-FR' },\n  ...xHandles.map(h => ({ url: `${RSSHUB}/twitter/user/${h}`, category: 'x', source: `@${h}` }))\n];\n\nfunction fetchOnce(urlStr, timeoutMs) {\n  return new Promise((resolve, reject) => {\n    let u;\n    try { u = new URL(urlStr); } catch (e) { return reject(e); }\n    const lib = u.protocol === 'https:' ? https : http;\n    const req = lib.request(u, {\n      method: 'GET',\n      headers: {\n        'User-Agent': 'KisnLab-Veille/1.0',\n        'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',\n        'Accept-Encoding': 'identity'\n      },\n      timeout: timeoutMs\n    }, (res) => {\n      const chunks = [];\n      res.on('data', c => chunks.push(c));\n      res.on('end', () => resolve({\n        status: res.statusCode,\n        headers: res.headers,\n        text: Buffer.concat(chunks).toString('utf8')\n      }));\n    });\n    req.on('timeout', () => { req.destroy(new Error('timeout')); });\n    req.on('error', reject);\n    req.end();\n  });\n}\n\nasync function fetchUrl(url, timeoutMs) {\n  let current = url;\n  for (let i = 0; i <= MAX_REDIRECTS; i++) {\n    const r = await fetchOnce(current, timeoutMs);\n    if (r.status >= 300 && r.status < 400 && r.headers.location && i < MAX_REDIRECTS) {\n      current = new URL(r.headers.location, current).toString();\n      continue;\n    }\n    return r;\n  }\n  return { status: 0, text: '', headers: {} };\n}\n\nfunction stripCdata(s) {\n  return (s || '').replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g, '$1');\n}\nfunction stripTags(s) {\n  return stripCdata(s).replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\n}\nfunction firstMatch(re, s) {\n  const m = s.match(re);\n  return m ? m[m.length - 1] : '';\n}\nfunction parseFeed(xml) {\n  const items = [];\n  const blockRe = /<(item|entry)\\b[^>]*>([\\s\\S]*?)<\\/\\1>/gi;\n  let m;\n  while ((m = blockRe.exec(xml)) !== null) {\n    const block = m[2];\n    const title = stripTags(firstMatch(/<title[^>]*>([\\s\\S]*?)<\\/title>/i, block));\n    let link = firstMatch(/<link[^>]*href=\"([^\"]+)\"/i, block);\n    if (!link) link = stripTags(firstMatch(/<link[^>]*>([\\s\\S]*?)<\\/link>/i, block));\n    if (!link) link = stripTags(firstMatch(/<guid[^>]*>([\\s\\S]*?)<\\/guid>/i, block));\n    const pubDate = firstMatch(/<(pubDate|published|updated|dc:date)[^>]*>([\\s\\S]*?)<\\/\\1>/i, block).trim();\n    const summary = stripTags(firstMatch(/<(description|summary|content[^>]*)\\s*>([\\s\\S]*?)<\\/\\1>/i, block)).slice(0, 400);\n    if (title && link) items.push({ title: title.slice(0, 200), url: link.trim(), pubDate, summary });\n  }\n  return items;\n}\n\nconst diag = [];\n\nasync function fetchSource(src) {\n  try {\n    const r = await fetchUrl(src.url, FETCH_TIMEOUT_MS);\n    if (r.status < 200 || r.status >= 300) {\n      diag.push(`${src.source}: HTTP ${r.status}`);\n      return [];\n    }\n    const parsed = parseFeed(r.text);\n    diag.push(`${src.source}: ${parsed.length} items bruts`);\n    return parsed.map(it => ({ ...it, category: src.category, source: src.source }));\n  } catch (e) {\n    diag.push(`${src.source}: ERR ${e.code || e.name} ${e.message}`);\n    return [];\n  }\n}\n\nconst cutoffMs = Date.now() - WINDOW_MS;\nconst seen = new Set();\nconst all = [];\n\nconst results = await Promise.all(sources.map(fetchSource));\nfor (const list of results) {\n  for (const it of list) {\n    if (!it.url || seen.has(it.url)) continue;\n    const ts = it.pubDate ? new Date(it.pubDate).getTime() : NaN;\n    if (isFinite(ts) && ts < cutoffMs) continue;\n    seen.add(it.url);\n    all.push(it);\n  }\n}\n\nall.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));\nconst items = all.slice(0, MAX_ITEMS);\n\nconst today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });\n\nconst goal = [\n  `Skill: strategie-veille`,\n  `Date: ${today}`,\n  `Mode: passif (items ci-dessous déjà fetchés sur les dernières 24h, ne refetch rien).`,\n  `Action: synthétise un digest éditorial narratif (4 sections IA / Dev / Business-FR / Sécu, 3-5 phrases prose chacune, liens inline obligatoires, ton Kael, clôture en 1 phrase) selon la spec du skill, puis poste dans #strategie via le bot.`,\n  `Si une catégorie n'a aucun item exploitable, écris \"RAS aujourd'hui\" pour cette section.`,\n  ``,\n  `Items (${items.length} entrées) :`,\n  JSON.stringify(items)\n].join('\\n');\n\nreturn [{\n  json: {\n    action: 'create_flow',\n    goal,\n    _itemCount: items.length,\n    _date: today,\n    _diag: diag\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "b2222222-2222-2222-2222-222222222222",
+      "name": "Fetch + Filter + Build payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://kisnlab-openclaw:18789/plugins/webhooks/n8n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"action\": \"{{ $json.action }}\",\n  \"goal\": {{ JSON.stringify($json.goal) }}\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [560, 0],
+      "id": "c3333333-3333-3333-3333-333333333333",
+      "name": "POST OpenClaw webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "CRON 9h30 7/7": {
+      "main": [
+        [
+          {
+            "node": "Fetch + Filter + Build payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch + Filter + Build payload": {
+      "main": [
+        [
+          {
+            "node": "POST OpenClaw webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Paris"
+  },
+  "tags": []
+}

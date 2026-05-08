@@ -34,7 +34,9 @@ Exemples : `admin-relance-factures.json`, `dev-brief-hebdo.json`
 
 ## Workflows actifs
 
-_Aucun workflow en production pour l'instant._
+| Workflow | Trigger | Action | Channel cible |
+|----------|---------|--------|--------------|
+| `strategie-publier-veille` | CRON `30 9 * * *` (9h30 7/7, Europe/Paris) | Fetch RSS multi-sources (33 flux : IA, Dev, Business-FR, Sécu, X via RSSHub) sur fenêtre 24h glissantes → POST webhook OpenClaw → skill `strategie-veille` synthétise un digest narratif | `#strategie` |
 
 ---
 
@@ -58,7 +60,6 @@ _Aucun workflow en production pour l'instant._
 
 | Workflow | Trigger | Action | Channel cible |
 |----------|---------|--------|--------------|
-| Veille tech hebdo | CRON lundi 8h | Agréger flux RSS → résumé | `#strategie` |
 | Rapport mensuel SASU | CRON 1er du mois | Synthèse activité + CA estimé | `#admin` |
 
 ---
@@ -70,8 +71,11 @@ _Aucun workflow en production pour l'instant._
 | Postgres | Database | BDD `n8n` sur `kisnlab-postgres` |
 | Redis | Queue | `kisnlab-redis:6379` |
 | Discord | Bot | Via `DISCORD_BOT_TOKEN` |
-| OpenClaw | Webhook | `http://openclaw:18789` (interne) |
+| OpenClaw | Webhook | `http://kisnlab-openclaw:18789/plugins/webhooks/n8n` (Bearer `OPENCLAW_WEBHOOK_SECRET`, exposé à n8n via env compose) |
+| RSSHub | HTTP | `http://kisnlab-rsshub:1200` (interne, sources X/Twitter, GitHub trending, Anthropic news, OpenAI blog) |
 | Langfuse | HTTP | `http://langfuse:3000` (interne) |
+
+> ⚠️ Convention DNS interne : utiliser le **nom du container** (`kisnlab-<service>`) et pas le service name Compose pour les URLs inter-containers. Le service name ne résout pas systématiquement (constaté pour `openclaw` depuis n8n, 2026-04-26).
 
 ---
 

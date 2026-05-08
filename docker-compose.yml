@@ -237,11 +237,21 @@ services:
       # Auth
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       N8N_SECURE_COOKIE: "false"
+      # Autorise l'accès à process.env depuis les Code nodes et expressions {{$env.*}}
+      # Nécessaire pour OPENCLAW_WEBHOOK_SECRET/URL utilisés par strategie-publier-veille.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Autorise les modules Node built-in (https, url, etc.) dans les Code nodes.
+      # Requis pour fetch/AbortSignal/Promise.all dans strategie-publier-veille.
+      NODE_FUNCTION_ALLOW_BUILTIN: "*"
+      NODE_FUNCTION_ALLOW_EXTERNAL: "*"
       # Discord — webhooks par channel (pas de bot token, évite les conflits gateway)
       DISCORD_WEBHOOK_ALERTES: ${DISCORD_WEBHOOK_ALERTES}
       DISCORD_WEBHOOK_BRIEFS: ${DISCORD_WEBHOOK_BRIEFS}
       DISCORD_WEBHOOK_LOGS: ${DISCORD_WEBHOOK_LOGS}
       DISCORD_WEBHOOK_ADMIN: ${DISCORD_WEBHOOK_ADMIN}
+      # Webhook OpenClaw (pour workflows n8n qui déclenchent des skills)
+      OPENCLAW_WEBHOOK_SECRET: ${OPENCLAW_WEBHOOK_SECRET}
+      OPENCLAW_WEBHOOK_URL: http://kisnlab-openclaw:18789/plugins/webhooks/n8n
     volumes:
       - ./volumes/n8n:/home/node/.n8n
       - ./workflows:/workflows
@@ -251,6 +261,32 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.n8n.rule=Host(`n8n.kisnlab.local`)"
       - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+
+  # ---------------------------------------------------------------------------
+  # RSSHUB — Conversion en flux RSS (X/Twitter, GitHub, etc.)
+  # Usage   : consommé par n8n pour la veille — interne uniquement (pas de Traefik)
+  # Cache   : Redis DB 2 (n8n utilise DB 0, on isole)
+  # ---------------------------------------------------------------------------
+  rsshub:
+    image: diygod/rsshub:latest
+    container_name: kisnlab-rsshub
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      CACHE_TYPE: redis
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379/2
+      CACHE_EXPIRE: "3600"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:1200/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - kisnlab-net
 
   # ---------------------------------------------------------------------------
   # CLICKHOUSE — Moteur analytique pour Langfuse v3

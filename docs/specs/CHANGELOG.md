@@ -8,6 +8,18 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-04-26
 
+### Pipeline veille — RSSHub + workflow n8n `strategie-publier-veille`
+
+Câblage du pipeline Veille en mode passif (n8n fetche, OpenClaw synthétise).
+
+- **`docker-compose.yml`** : nouveau service `rsshub` (`diygod/rsshub:latest`, interne kisnlab-net, cache Redis DB 2, healthcheck `/healthz`). Pas de Traefik, pas de port host, aucune nouvelle var `.env`.
+- **`docker-compose.yml`** : section `n8n.environment` reçoit `OPENCLAW_WEBHOOK_SECRET` et `OPENCLAW_WEBHOOK_URL=http://kisnlab-openclaw:18789/plugins/webhooks/n8n` (utilisée via `{{$env.OPENCLAW_WEBHOOK_*}}` dans le workflow, secret jamais sérialisé en JSON).
+- **`workflows/strategie-publier-veille.json`** : 3 nodes — Schedule Trigger (`30 9 * * *` Europe/Paris) → Code "Fetch + Filter + Build payload" (33 sources : 5 IA, 6 Dev, 3 Business-FR, 3 Sécu, 15 X via RSSHub ; parser RSS/Atom maison, `Promise.all` + timeout 10s, fenêtre 24h glissantes, dédupe URL, top 60 items) → HTTP Request POST OpenClaw webhook avec `action: create_flow` et `goal` contenant les items pré-fetchés.
+- **Test webhook validé** : `wget` depuis n8n vers `kisnlab-openclaw:18789/plugins/webhooks/n8n` avec Bearer renvoie `{"ok":true,...}`. Workflow importé manuellement dans n8n UI puis activé après run de test.
+- **X via RSSHub** : option A retenue — sans cookie auth, RSSHub renvoie 503 sur `/twitter/user/<handle>`. Le workflow encaisse silencieusement (`fetchSource` retourne `[]`), le skill `strategie-veille` écrit "RAS aujourd'hui" pour la section X. À évaluer après 1-2 semaines : passer à l'option B (cookie `auth_token` injecté) si X est trop muet.
+
+**Bug DNS Docker corrigé en passant** : le service name `openclaw` ne résout pas depuis n8n alors que `kisnlab-openclaw` (nom de container) le fait. Convention adoptée pour toutes les URLs internes inter-services. `docs/specs/N8N.md` corrigé en conséquence.
+
 ### Skill — `strategie-veille` créé
 
 Skill OpenClaw P2 du backlog `SKILLS.md` livré. Veille quotidienne sur 4 axes (IA & agentique en focus, dev/IT, business/FR pour entrepreneurs IT, sécurité). Mode actif (l'agent fetche lui-même via le plugin browser), digest narratif court, ton Kael (cynique sec, factuel d'abord). Triggers : `veille`, `veille IA`, `veille dev`, `veille business`, `veille sécu`, `quoi de neuf en [sujet]` dans `#strategie`.
