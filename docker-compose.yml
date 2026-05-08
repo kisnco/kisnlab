@@ -325,6 +325,13 @@ services:
       KISNLAB_API_TOKEN: ${KISNLAB_API_TOKEN}
       LOG_LEVEL: INFO
       GH_APP_NAME: kisnlab-dev
+      # Langfuse v3 — tracing LangChain via CallbackHandler (cf. dev.py).
+      # Host = service Docker (bypass Traefik depuis le container).
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_HOST: http://langfuse-web:3000
+      # OTLP timeout 30s (default ~1.7s) : absorbe le cold-start de langfuse-web.
+      OTEL_EXPORTER_OTLP_TIMEOUT: "30000"
     volumes:
       # Bot GitHub kisnlab-dev (read-only). Fallback env vars supportés si non monté.
       - ${HOME}/.claude/secrets/kisnlab-dev.env:/secrets/kisnlab-dev.env:ro
@@ -359,6 +366,47 @@ services:
       - kisnlab-net
 
   # ---------------------------------------------------------------------------
+  # MINIO — Blob storage S3-compatible (Langfuse v3 OTEL ingest l'exige)
+  # ---------------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: kisnlab-minio
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - ./volumes/minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kisnlab-net
+
+  # MinIO bucket bootstrap — one-shot (idempotent : --ignore-existing)
+  minio-init:
+    image: minio/mc:latest
+    container_name: kisnlab-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing local/langfuse &&
+      echo 'bucket langfuse ready'
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    networks:
+      - kisnlab-net
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
   # LANGFUSE v3 WEB — Observabilité LLM (tokens, coûts, traces, latence)
   # Accès UI : http://langfuse.kisnlab.local
   # ---------------------------------------------------------------------------
@@ -372,6 +420,8 @@ services:
       clickhouse:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/langfuse
@@ -390,11 +440,16 @@ services:
       # LANGFUSE_INIT_* retiré : créait un org/projet vide en doublon de
       # l'org "KIS'n Code" + projet "KIS'n Lab" déjà créés via l'UI au setup.
       # Si nouveau bootstrap nécessaire, recréer via l'UI ou l'API REST.
-      LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: us-east-1
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
       LANGFUSE_S3_MEDIA_UPLOAD_ENABLED: "false"
-      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: "disabled"
       LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: "disabled"
-      LANGFUSE_S3_EVENT_UPLOAD_REGION: "us-east-1"
     networks:
       - kisnlab-net
     labels:
@@ -416,6 +471,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/langfuse
       CLICKHOUSE_URL: http://clickhouse:8123
@@ -428,11 +485,16 @@ services:
       NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
       SALT: ${LANGFUSE_SALT}
       TELEMETRY_ENABLED: "false"
-      LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: us-east-1
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
       LANGFUSE_S3_MEDIA_UPLOAD_ENABLED: "false"
-      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: "disabled"
       LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: "disabled"
-      LANGFUSE_S3_EVENT_UPLOAD_REGION: "us-east-1"
     networks:
       - kisnlab-net
 
@@ -452,6 +514,7 @@ services:
 #                                          kisnlab-openclaw        : /certs/client (RO)
 #   ./volumes/n8n                        → kisnlab-n8n             : /home/node/.n8n
 #   ./volumes/clickhouse                 → kisnlab-clickhouse      : /var/lib/clickhouse
+#   ./volumes/minio                      → kisnlab-minio           : /data (blob storage Langfuse v3)
 #
 # Named volume Docker-managed :
 #   openclaw-dind-data → /var/lib/docker (overlay2 storage de la DinD)
