@@ -7,7 +7,9 @@ which handles the tool-calling loop.
 
 from __future__ import annotations
 
-from typing import TypedDict
+import logging
+import os
+from typing import Any, TypedDict
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage
@@ -15,6 +17,8 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import create_react_agent
 
 from app.agents.tools.github_tools import GITHUB_PR_TOOLS
+
+logger = logging.getLogger(__name__)
 
 MODEL = "claude-haiku-4-5-20251001"
 
@@ -39,6 +43,26 @@ class DevState(TypedDict):
     response: str
 
 
+def _build_langfuse_callbacks() -> list[Any]:
+    """Return a list with one Langfuse CallbackHandler if Langfuse is reachable.
+
+    Defensive: missing env vars OR import failure (lib absent / network error)
+    yields ``[]`` so the agent stays usable without observability.
+    """
+    if not (os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY")):
+        return []
+    try:
+        from langfuse.langchain import CallbackHandler
+
+        return [CallbackHandler()]
+    except Exception as exc:
+        logger.warning("Langfuse tracing disabled (callback unavailable): %s", exc)
+        return []
+
+
+_LANGFUSE_CALLBACKS: list[Any] = _build_langfuse_callbacks()
+
+
 def call_claude(state: DevState) -> DevState:
     llm = ChatAnthropic(model=MODEL, max_tokens=4096)
     react_agent = create_react_agent(llm, tools=GITHUB_PR_TOOLS)
@@ -48,7 +72,8 @@ def call_claude(state: DevState) -> DevState:
                 SystemMessage(content=SYSTEM_PROMPT),
                 ("user", state["task"]),
             ]
-        }
+        },
+        config={"callbacks": _LANGFUSE_CALLBACKS, "run_name": "dev_agent"},
     )
     final_message = result["messages"][-1]
     content = final_message.content

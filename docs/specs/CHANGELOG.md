@@ -8,6 +8,31 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-08
 
+### Phase C — tracing Langfuse câblé sur l'agent `dev`
+
+L'agent LangGraph `dev` envoie désormais ses traces (LLM calls + tool calls de la boucle ReAct) dans Langfuse v3, projet `KIS'n Code › KIS'n Lab`.
+
+- **`services/api/app/agents/dev.py`** :
+  - Ajout d'un `_build_langfuse_callbacks()` défensif (env vars manquantes ou import KO → `[]`, l'agent reste opérationnel sans observabilité).
+  - `react_agent.invoke(..., config={"callbacks": _LANGFUSE_CALLBACKS, "run_name": "dev_agent"})` — la trace racine s'appelle donc `dev_agent` côté UI.
+- **`services/api/requirements.txt`** : `langfuse==3.14.6` + `langchain==0.3.30` (le SDK Langfuse v3 exige le package `langchain` complet pour son `CallbackHandler`, pas juste `langchain-core`).
+- **`docker-compose.yml`** côté `kisnlab-api` :
+  - Env vars `LANGFUSE_PUBLIC_KEY/SECRET_KEY` (`.env`) + `LANGFUSE_HOST=http://langfuse-web:3000` (résolution interne, bypass Traefik).
+  - `OTEL_EXPORTER_OTLP_TIMEOUT=30000` — le défaut OTel (~1.7 s) est insuffisant face au cold-start de langfuse-web (Next.js).
+- **Nouveau service `minio` (+ `minio-init`)** : Langfuse v3 OTEL ingest exige un blob storage S3-compatible (toutes les configs `LANGFUSE_S3_EVENT_UPLOAD_*=disabled` étaient en réalité ignorées en v3 → 500 sur ingest). MinIO local résout ça : bucket `langfuse`, healthcheck `mc ready`, bind mount `./volumes/minio`. `minio-init` est un one-shot idempotent (`mc mb --ignore-existing`).
+- **`langfuse-web` + `langfuse-worker`** : `LANGFUSE_S3_EVENT_UPLOAD_ENABLED=true`, bucket `langfuse`, endpoint `http://minio:9000`, `FORCE_PATH_STYLE=true`, creds `MINIO_ROOT_*`. `LANGFUSE_S3_MEDIA_UPLOAD_ENABLED` reste `false` (l'agent dev n'envoie pas de média).
+- **`.env`** : ajout `MINIO_ROOT_USER` + `MINIO_ROOT_PASSWORD` (32 chars, généré).
+- **Tests** : 34 tests verts (aucun changement de signature). L'init Langfuse étant défensif, les tests qui n'ont pas les env vars ne tentent pas l'import.
+- **Validation E2E** : `POST /agents/dev/run` → 3 traces `dev_agent` visibles dans `KIS'n Lab`, input/output complets, latence + tokens trackés.
+
+### Relance Langfuse v3 (Phase 2)
+
+`clickhouse`, `langfuse-web` et `langfuse-worker` étaient `Exited` depuis 2026-05-02 09:35 (SIGTERM propre, pas de crash applicatif — vraisemblablement un `compose stop` ou veille machine, jamais relancés). Pas de modif de conf nécessaire :
+
+- `docker compose up -d clickhouse` → healthy en ~10s.
+- `docker compose up -d langfuse-web langfuse-worker` → migrations Prisma (390) et ClickHouse à jour, web `Ready`, worker démarre toutes ses queues (ingestion, evals, posthog/mixpanel/blobstorage, data-retention, webhooks…).
+- Vérifs : `GET /api/public/health` → `200 {"status":"OK","version":"3.169.0"}` ; `GET /api/public/projects` (auth `LANGFUSE_PUBLIC_KEY/SECRET_KEY`) → renvoie l'org `KIS'n Code` + projet `KIS'n Lab`. Clés API toujours valides, prêtes pour le câblage Phase C (tracing `kisnlab-api`).
+
 ### Câblage des tools GitHub PR côté agent `dev`
 
 L'agent LangGraph `dev` peut désormais lister, lire et reviewer les PRs via la GitHub App `kisnlab-dev` provisionnée plus tôt dans la journée.

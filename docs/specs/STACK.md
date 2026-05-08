@@ -23,6 +23,7 @@ Accès via domaines `.kisnlab.local` routés par Traefik.
 | **n8n** | `n8nio/n8n:latest` | Workflows automatisés | `http://n8n.kisnlab.local` |
 | **RSSHub** | `diygod/rsshub:latest` | Convertit X, GitHub, blogs en flux RSS pour n8n | interne uniquement |
 | **Langfuse** | `langfuse/langfuse:latest` | Observabilité LLM | `http://langfuse.kisnlab.local` |
+| **MinIO** | `minio/minio:latest` | Blob storage S3-compatible (event uploads Langfuse v3) | interne uniquement |
 | **KisnLab API** | `python:3.12-slim` (build local) | FastAPI — bridge OpenClaw ↔ LangGraph (Phase A : plomberie) | `http://api.kisnlab.local` |
 
 ---
@@ -64,6 +65,7 @@ Tous les volumes sont des **bind mounts** vers `./volumes/<name>/` (gitignored).
 | `./volumes/openclaw` | OpenClaw | Cache et données internes (`/data`) |
 | `./volumes/n8n` | n8n | Credentials, workflows, executions |
 | `./volumes/clickhouse` | ClickHouse | Données Langfuse (analytics) |
+| `./volumes/minio` | MinIO | Buckets S3-compatibles, dont `langfuse` (event uploads Langfuse v3) |
 | `./volumes/openclaw-dind-certs-ca` | OpenClaw-DinD | Certs TLS CA auto-générés par dind |
 | `./volumes/openclaw-dind-certs-client` | OpenClaw-DinD ↔ OpenClaw | Certs TLS client (RO côté openclaw) |
 | `./volumes/openclaw-dind-data` | OpenClaw-DinD | Storage du daemon (images, builds, containers du sandbox) — **à purger périodiquement** : `docker exec kisnlab-openclaw-dind docker system prune -af` |
@@ -112,6 +114,8 @@ Toutes dans `.env` (jamais committées). Voir `.env.example` pour la liste compl
 | `REDIS_PASSWORD` | Auth Redis |
 | `N8N_ENCRYPTION_KEY` | Ne jamais changer après 1er lancement |
 | `LANGFUSE_SECRET / SALT` | Auth Langfuse |
+| `LANGFUSE_PUBLIC_KEY / SECRET_KEY` | Clés API projet Langfuse (utilisées par le tracing côté `kisnlab-api`) |
+| `MINIO_ROOT_USER / MINIO_ROOT_PASSWORD` | Auth MinIO + creds S3 réutilisées par Langfuse pour l'event upload |
 | `TRAEFIK_DASHBOARD_AUTH` | Basicauth dashboard Traefik (htpasswd format) |
 | `DISCORD_BOT_TOKEN` | Token bot Discord |
 
