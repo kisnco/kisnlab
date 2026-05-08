@@ -12,7 +12,8 @@
 
 | Agent | App | Statut |
 |---|---|---|
-| Claude Code | `kisnlab-claude-code` | ✅ actif (mai 2026) |
+| Claude Code (local) | `kisnlab-claude-code` | ✅ actif (2026-05-08) |
+| Agent dev (LangGraph) | `kisnlab-dev` | ✅ actif (2026-05-08) — provisionné, tools git pas encore câblés côté agent |
 | Codex (futur) | `kisnlab-codex` | ⏳ à créer |
 | Autres agents | `kisnlab-<nom>` | ⏳ à créer |
 
@@ -26,6 +27,23 @@
 - **Permissions repo** : Contents R+W · Pull requests R+W · Issues R+W · Workflows R+W · Metadata R
 - **Webhooks** : désactivés (non nécessaires pour le use-case)
 - **Repos accessibles** : `All repositories` de l'org `kisnco`
+- **Use-case** : PRs ouvertes par Claude Code en local depuis le terminal de Mélodie
+
+## App `kisnlab-dev`
+
+- **Owner** : `@kisnco`
+- **App ID** : `3643429`
+- **Client ID** : `Iv23liQzx8EgEVE4h2Sk`
+- **Installation ID** : `130547284`
+- **Bot login** : `kisnlab-dev[bot]` (auto-généré par GitHub)
+- **Permissions repo** : Contents R+W · Pull requests R+W · Issues R+W · Workflows R+W · Metadata R
+- **Webhooks** : désactivés
+- **Repos accessibles** : `All repositories` de l'org `kisnco`
+- **Use-case** : PRs et reviews automatisées par l'agent LangGraph `dev` (`services/api/app/agents/dev.py`). Inclut review entre agents : le bot dev peut review les PRs ouvertes par Claude Code et inversement.
+
+> ⚠️ **Stockage des secrets en Docker (à câbler quand l'agent dev gagnera des tools git/gh)** : les scripts actuels lisent `~/.claude/secrets/` qui n'est pas accessible depuis le container `kisnlab-api`. Choix à trancher :
+> - (A) volume mount du `.pem` dans `docker-compose.yml`
+> - (B) injection via env vars (`GH_APP_PRIVATE_KEY` multi-ligne + `GH_APP_ID` + `GH_INSTALLATION_ID`)
 
 ## Plomberie locale
 
