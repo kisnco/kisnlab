@@ -26,7 +26,7 @@ OpenClaw reste le point d'entrée Discord. Il délègue à FastAPI les tâches m
 |-------|------|--------|-------|----------|
 | **dev** | Tâches techniques (code, debug, refactor, archi) | `claude-haiku-4-5-20251001` | B (V1) ✅ | `POST /agents/dev/run` |
 | **reviewer** | Review PR multi-perspectives (security/quality/architecture) | `claude-haiku-4-5-20251001` | 1 (Phase 1) ✅ | `POST /agents/reviewer/run` |
-| **team** | Supervisor — route vers `dev` ou `reviewer` | `claude-haiku-4-5-20251001` | 1 (Phase 1) ⏳ | `POST /agents/team/run` |
+| **team** | Supervisor — route vers `dev` ou `reviewer` | `claude-haiku-4-5-20251001` | 1 (Phase 1) ✅ | `POST /agents/team/run` |
 | **commercial** | Prospects, devis, suivi client | (à définir) | F | `POST /agents/commercial/run` |
 | **admin** | Compta SASU, juridique, factures | (à définir) | F | `POST /agents/admin/run` |
 | **comm** | Contenu, réseaux, LinkedIn | (à définir) | F | `POST /agents/comm/run` |
@@ -115,6 +115,36 @@ Formats de PR ref acceptés : URL GitHub, `owner/repo#N`, narratif `#N (in|of|de
 
 ---
 
+## Graphe `team` (Phase 1)
+
+```
+START → route → delegate → END
+```
+
+État : `TeamState` (Pydantic — `task`, `routed_to: Optional[AgentName]`, `response`).
+
+- **`route`** : Claude Haiku avec `with_structured_output(_Route)` (where `_Route(agent: Literal["dev", "reviewer"])`). Décision déterministe, fallback `dev` si l'appel LLM plante.
+- **`delegate`** : invoque le sub-graph ciblé (`dev_graph` ou `reviewer_graph`) avec son state propre (`DevState` / `ReviewerState`). Les sub-graphs sont injectables dans `build_team_graph(dev_graph=..., reviewer_graph=...)` — le router HTTP réutilise les singletons existants pour éviter une double compilation.
+
+**Règle de fallback** (encodée dans le system prompt) : si la tâche ne mentionne pas explicitement une PR à reviewer (URL GitHub / `owner/repo#N` / narratif), route vers `dev`.
+
+**Tracing Langfuse** : `run_name=team_router` sur l'appel de routage. Le sub-graph qui exécute conserve ses propres traces (`dev_agent` ou `reviewer_<perspective>`).
+
+**Endpoint** :
+
+```http
+POST /agents/team/run
+{ "task": "review kisnco/kisnlab#7" }
+
+→ 200 { "agent": "team",
+        "response": "# Review …",
+        "metadata": { "routed_to": "reviewer" } }
+```
+
+`ValueError` du sub-graph (typiquement reviewer sur une PR ref invalide) → `422`.
+
+---
+
 ## Phase 1 — Équipe dev multi-agents (en cours)
 
 Pattern : **hybride** — supervisor au top + fan-out parallèle dans le Reviewer.
@@ -174,7 +204,7 @@ L'agent `dev` est exempt de cette règle (sortie textuelle, pas d'action externe
 
 - [x] Phase B — Agent `dev` (1 node, Haiku, sans tracing)
 - [x] Phase C — Tracing Langfuse via `CallbackHandler` (run_name=`dev_agent`)
-- [ ] Phase 1 — Équipe Dev + Reviewer (PR-1 ✅, PR-2 ✅, PR-3/4 en cours)
+- [ ] Phase 1 — Équipe Dev + Reviewer (PR-1 ✅, PR-2 ✅, PR-3 ✅, PR-4 en cours)
 - [ ] Phase 2 — Dev avec tools d'écriture (Codex)
 - [ ] Phase F — `commercial` / `admin` / `comm` + pattern draft Discord
 - [ ] Plus tard — checkpoints Postgres pour reprises longues

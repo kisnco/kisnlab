@@ -2,7 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.agents.dev import build_dev_graph
 from app.agents.reviewer import build_reviewer_graph, reviewer_metadata
-from app.agents.state import AgentRequest, AgentResponse, DevState, ReviewerState
+from app.agents.state import (
+    AgentRequest,
+    AgentResponse,
+    DevState,
+    ReviewerState,
+    TeamState,
+)
+from app.agents.team import build_team_graph
 from app.auth import verify_token
 
 router = APIRouter(
@@ -13,6 +20,7 @@ router = APIRouter(
 
 dev_graph = build_dev_graph()
 reviewer_graph = build_reviewer_graph()
+team_graph = build_team_graph(dev_graph=dev_graph, reviewer_graph=reviewer_graph)
 
 
 def _read(result, field: str):
@@ -37,4 +45,18 @@ def run_reviewer_agent(req: AgentRequest) -> AgentResponse:
         agent="reviewer",
         response=_read(result, "response"),
         metadata=reviewer_metadata(_read(result, "perspectives")),
+    )
+
+
+@router.post("/team/run", response_model=AgentResponse)
+def run_team_agent(req: AgentRequest) -> AgentResponse:
+    try:
+        result = team_graph.invoke(TeamState(task=req.task))
+    except ValueError as exc:
+        # Sub-graph parse error (e.g. reviewer PR ref) → 422.
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    return AgentResponse(
+        agent="team",
+        response=_read(result, "response"),
+        metadata={"routed_to": _read(result, "routed_to")},
     )
