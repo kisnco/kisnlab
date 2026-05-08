@@ -20,6 +20,14 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Python
+__pycache__/
+*.py[cod]
+.coverage
+.pytest_cache/
+.venv/
+venv/
+
 # Claude Code local
 .claude/settings.local.json
 

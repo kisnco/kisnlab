@@ -13,7 +13,7 @@
 | Agent | App | Statut |
 |---|---|---|
 | Claude Code (local) | `kisnlab-claude-code` | ✅ actif (2026-05-08) |
-| Agent dev (LangGraph) | `kisnlab-dev` | ✅ actif (2026-05-08) — provisionné, tools git pas encore câblés côté agent |
+| Agent dev (LangGraph) | `kisnlab-dev` | ✅ actif (2026-05-08) — tools PR read+review câblés (`gh_pr_list/get/diff/review/comment`) |
 | Codex (futur) | `kisnlab-codex` | ⏳ à créer |
 | Autres agents | `kisnlab-<nom>` | ⏳ à créer |
 
@@ -41,9 +41,30 @@
 - **Repos accessibles** : `All repositories` de l'org `kisnco`
 - **Use-case** : PRs et reviews automatisées par l'agent LangGraph `dev` (`services/api/app/agents/dev.py`). Inclut review entre agents : le bot dev peut review les PRs ouvertes par Claude Code et inversement.
 
-> ⚠️ **Stockage des secrets en Docker (à câbler quand l'agent dev gagnera des tools git/gh)** : les scripts actuels lisent `~/.claude/secrets/` qui n'est pas accessible depuis le container `kisnlab-api`. Choix à trancher :
-> - (A) volume mount du `.pem` dans `docker-compose.yml`
-> - (B) injection via env vars (`GH_APP_PRIVATE_KEY` multi-ligne + `GH_APP_ID` + `GH_INSTALLATION_ID`)
+### Tools côté agent (Python, `services/api/app/agents/tools/`)
+
+| Module | Rôle |
+|---|---|
+| `github_app.py` | Charge les credentials, signe le JWT, échange contre installation token (cache 50 min, thread-safe) |
+| `github_client.py` | Client HTTP : `list_prs`, `get_pr`, `get_pr_diff`, `review_pr`, `comment_pr` |
+| `github_tools.py` | Wrappers `@tool` LangChain : `gh_pr_list`, `gh_pr_get`, `gh_pr_diff`, `gh_pr_review`, `gh_pr_comment` |
+
+Scope volontairement réduit : **read + review uniquement** (pas de `git push` ni `gh_pr_create`). On les ajoutera quand un agent aura un déclencheur concret pour produire du code.
+
+### Secrets dans le container `kisnlab-api`
+
+Choix retenu : **(A) volume mount** dans `docker-compose.yml`.
+
+```yaml
+kisnlab-api:
+  environment:
+    GH_APP_NAME: kisnlab-dev
+  volumes:
+    - ${HOME}/.claude/secrets/kisnlab-dev.env:/secrets/kisnlab-dev.env:ro
+    - ${HOME}/.claude/secrets/kisnlab-dev.private-key.pem:/secrets/kisnlab-dev.private-key.pem:ro
+```
+
+`github_app.load_credentials()` lit d'abord `/secrets/<app>.{env,private-key.pem}`. **Fallback** automatique sur les env vars `GH_APP_ID` / `GH_INSTALLATION_ID` / `GH_APP_PRIVATE_KEY` si les fichiers ne sont pas montés (utile pour le déploiement cloud à venir).
 
 ## Plomberie locale
 

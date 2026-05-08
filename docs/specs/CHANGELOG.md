@@ -8,6 +8,20 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-08
 
+### Câblage des tools GitHub PR côté agent `dev`
+
+L'agent LangGraph `dev` peut désormais lister, lire et reviewer les PRs via la GitHub App `kisnlab-dev` provisionnée plus tôt dans la journée.
+
+- **Nouveau package `services/api/app/agents/tools/`** :
+  - `github_app.py` : charge les credentials (`/secrets/<app>.{env,pem}` → fallback env vars), signe le JWT RS256, échange contre installation token, cache 50 min thread-safe.
+  - `github_client.py` : client HTTP (httpx) — `list_prs`, `get_pr`, `get_pr_diff`, `review_pr`, `comment_pr`. Pas de checkout local : tout passe par l'API GitHub.
+  - `github_tools.py` : 5 tools LangChain (`@tool`) — `gh_pr_list`, `gh_pr_get`, `gh_pr_diff`, `gh_pr_review`, `gh_pr_comment`. Diff tronqué à 60 k chars pour rester dans le budget contexte.
+- **Agent `dev.py` recâblé** sur `create_react_agent` (boucle ReAct) avec les 5 tools ; signature `{"task", "response"}` préservée pour le router et les tests existants.
+- **`docker-compose.yml`** : volumes read-only `/secrets/kisnlab-dev.{env,private-key.pem}` montés sur `kisnlab-api`, `GH_APP_NAME=kisnlab-dev` ajouté.
+- **Scope volontairement réduit** : pas de `gh_pr_create` ni `git_push` aujourd'hui — KIS oblige, on les ajoutera quand un agent aura un déclencheur concret pour produire du code à merger.
+- **Tests** : 21 nouveaux tests unitaires (httpx mocké) — 99 % de couverture sur les modules ajoutés.
+- **Specs** : `docs/specs/GITHUB_BOT.md` mis à jour (section "Tools côté agent" + section "Secrets dans le container").
+
 ### Identité bot pour l'agent `dev` — GitHub App `kisnlab-dev`
 
 Provisionnement d'une seconde GitHub App pour l'agent LangGraph `dev` (`services/api/app/agents/dev.py`), suivant la convention `kisnlab-<agent>` actée juste avant.
