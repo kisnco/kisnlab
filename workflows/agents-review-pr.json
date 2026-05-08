@@ -1,0 +1,138 @@
+{
+  "name": "agents-review-pr",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "github-pr",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "11111111-aaaa-1111-aaaa-111111111111",
+      "name": "GitHub Webhook",
+      "webhookId": "github-pr"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst headers = $input.item.json.headers || {};\n\n// Raw body : utilise le binary si dispo (rawBody=true), sinon stringify\nlet rawBody;\nif ($input.item.binary && $input.item.binary.data) {\n  const b64 = $input.item.binary.data.data;\n  rawBody = Buffer.from(b64, 'base64').toString('utf8');\n} else if (typeof $input.item.json.body === 'string') {\n  rawBody = $input.item.json.body;\n} else {\n  rawBody = JSON.stringify($input.item.json.body || {});\n}\n\nlet body;\ntry {\n  body = JSON.parse(rawBody);\n} catch (e) {\n  body = $input.item.json.body || {};\n}\n\n// HMAC SHA-256 verification\nconst signature = headers['x-hub-signature-256'] || '';\nconst secret = $env.GITHUB_WEBHOOK_SECRET || '';\nconst expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');\n\nlet valid = false;\ntry {\n  if (signature.length === expected.length) {\n    valid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));\n  }\n} catch (e) {}\n\nconst event = headers['x-github-event'];\nconst action = body.action;\nconst author = body && body.pull_request && body.pull_request.user && body.pull_request.user.login;\nconst isPR = event === 'pull_request' && ['opened', 'reopened'].includes(action);\nconst isFromDevBot = author === 'kisnlab-dev[bot]';\nconst shouldReview = valid && isPR && !isFromDevBot;\n\nlet reason;\nif (!valid) reason = 'invalid signature';\nelse if (!isPR) reason = `event=${event} action=${action} (skip)`;\nelse if (isFromDevBot) reason = 'self-review skip';\nelse reason = 'ok';\n\nreturn [{\n  json: {\n    valid,\n    shouldReview,\n    event,\n    action,\n    repo: body && body.repository && body.repository.full_name,\n    number: body && body.pull_request && body.pull_request.number,\n    title: body && body.pull_request && body.pull_request.title,\n    author,\n    reason\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "id": "22222222-bbbb-2222-bbbb-222222222222",
+      "name": "Verify & Filter"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-should-review",
+              "leftValue": "={{ $json.shouldReview }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 0],
+      "id": "33333333-cccc-3333-cccc-333333333333",
+      "name": "Should Review?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://kisnlab-api:8000/agents/dev/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.KISNLAB_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"task\": \"Review la PR #{{ $json.number }} sur {{ $json.repo }} (titre : {{ $json.title }}, auteur : @{{ $json.author }}). Etapes : 1) lis le diff via gh_pr_diff, 2) analyse rapidement (KIS, simplicite, securite), 3) poste UNE seule review via gh_pr_review avec event APPROVE / REQUEST_CHANGES / COMMENT et un body markdown structure. Ne reboucle pas, ne poste pas plusieurs reviews.\"\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [720, -120],
+      "id": "44444444-dddd-4444-dddd-444444444444",
+      "name": "Trigger Dev Agent"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true, \"triggered\": true, \"pr\": {{ $('Verify & Filter').item.json.number }} }"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [960, -120],
+      "id": "55555555-eeee-5555-eeee-555555555555",
+      "name": "Respond OK"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true, \"triggered\": false, \"reason\": \"{{ $('Verify & Filter').item.json.reason }}\" }"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [720, 120],
+      "id": "66666666-ffff-6666-ffff-666666666666",
+      "name": "Respond Skipped"
+    }
+  ],
+  "connections": {
+    "GitHub Webhook": {
+      "main": [[{ "node": "Verify & Filter", "type": "main", "index": 0 }]]
+    },
+    "Verify & Filter": {
+      "main": [[{ "node": "Should Review?", "type": "main", "index": 0 }]]
+    },
+    "Should Review?": {
+      "main": [
+        [{ "node": "Trigger Dev Agent", "type": "main", "index": 0 }],
+        [{ "node": "Respond Skipped", "type": "main", "index": 0 }]
+      ]
+    },
+    "Trigger Dev Agent": {
+      "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {}
+}

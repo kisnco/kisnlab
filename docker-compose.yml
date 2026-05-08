@@ -36,6 +36,21 @@ services:
       - "traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
 
   # ---------------------------------------------------------------------------
+  # CLOUDFLARED — Tunnel Cloudflare Zero Trust pour exposer webhook.kisnlab.fr
+  # Le mapping <hostname> → <service interne> est gere dans le dashboard
+  # Cloudflare (Zero Trust → Networks → Tunnels → kisnlab-dev → Public Hostnames)
+  # ---------------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: kisnlab-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - kisnlab-net
+    depends_on:
+      - n8n
+
+  # ---------------------------------------------------------------------------
   # POSTGRES 16 + pgvector — Base unifiée (relationnelle + vectorielle)
   # 3 bases créées automatiquement : openclaw · n8n · langfuse
   # ---------------------------------------------------------------------------
@@ -221,7 +236,7 @@ services:
       N8N_HOST: n8n.kisnlab.local
       N8N_PORT: 5678
       N8N_PROTOCOL: http
-      WEBHOOK_URL: http://n8n.kisnlab.local/
+      WEBHOOK_URL: https://webhook.kisnlab.fr/
       GENERIC_TIMEZONE: Europe/Paris
       TZ: Europe/Paris
       # Base Postgres
@@ -231,8 +246,9 @@ services:
       DB_POSTGRESDB_DATABASE: n8n
       DB_POSTGRESDB_USER: ${POSTGRES_USER}
       DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
-      # Queue Redis
-      EXECUTIONS_MODE: queue
+      # Mode d'exécution : regular (single-process). Queue mode requiert un worker
+      # séparé qui n'est pas provisionné — gardé en réserve si besoin de scaler.
+      EXECUTIONS_MODE: regular
       QUEUE_BULL_REDIS_HOST: redis
       QUEUE_BULL_REDIS_PORT: 6379
       QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -254,6 +270,9 @@ services:
       # Webhook OpenClaw (pour workflows n8n qui déclenchent des skills)
       OPENCLAW_WEBHOOK_SECRET: ${OPENCLAW_WEBHOOK_SECRET}
       OPENCLAW_WEBHOOK_URL: http://kisnlab-openclaw:18789/plugins/webhooks/n8n
+      # GitHub webhook → review automatique par l'agent dev
+      KISNLAB_API_TOKEN: ${KISNLAB_API_TOKEN}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
     volumes:
       - ./volumes/n8n:/home/node/.n8n
       - ./workflows:/workflows
