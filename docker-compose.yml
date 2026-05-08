@@ -386,7 +386,10 @@ services:
     networks:
       - kisnlab-net
 
-  # MinIO bucket bootstrap — one-shot (idempotent : --ignore-existing)
+  # MinIO bucket bootstrap — one-shot (idempotent : --ignore-existing).
+  # Après `docker compose down -v` (volume wipe), relancer manuellement :
+  # `docker compose run --rm minio-init`. Sinon Compose laisse le container
+  # en `Exited(0)` et ne le rejoue pas sur les `up -d` suivants.
   minio-init:
     image: minio/mc:latest
     container_name: kisnlab-minio-init
