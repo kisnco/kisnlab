@@ -103,8 +103,28 @@ docs/specs/
 ├── DATABASE.md       → schéma Postgres, tables, pgvector
 ├── SKILLS.md         → liste des skills, rôles, LLM assigné
 ├── PROJETS.md        → projets actifs et leur état
+├── GITHUB_BOT.md     → identité bot (GitHub App) pour les PRs des agents
 └── CHANGELOG.md      → historique de toutes les modifications
 ```
+
+---
+
+## Workflow git/PR — IMPORTANT pour Claude Code
+
+Toute PR ouverte par Claude Code DOIT passer par le bot `kisnlab-claude-code[bot]` (sinon Mélodie ne peut pas l'approuver). Voir `docs/specs/GITHUB_BOT.md`.
+
+```bash
+# 1. Commit normalement (auteur = humain, c'est OK)
+git commit -m "..."
+
+# 2. Push via le bot (HTTPS+token sur la volée, l'origin SSH n'est pas touché)
+./scripts/gh-app-bot.sh push -u origin <branche>
+
+# 3. Créer la PR via le bot (label claude-generated auto-ajouté)
+./scripts/gh-app-bot.sh pr-create --title "..." --body "..."
+```
+
+Le wrapper accepte aussi `exec <cmd>` pour toute commande qui a besoin du token (ex. `gh issue create`).
 
 ---
 

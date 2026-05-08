@@ -8,6 +8,23 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-08
 
+### Identité bot pour les agents IA — GitHub App `kisnlab-claude-code`
+
+Mise en place d'une identité dédiée pour les PRs ouvertes par Claude Code, afin de permettre l'approbation par un humain (impossible si auteur = self avec branch protection) et préparer un modèle multi-agents.
+
+- **Choix d'archi** : GitHub App (vs bot user) — pas de siège org, tokens 1h auto-renouvelés, permissions fines, modèle scalable (1 App par agent).
+- **App `kisnlab-claude-code`** : créée côté `@kisnco`, App ID `3643047`, Installation ID `130539343`. Permissions : Contents/PRs/Issues/Workflows R+W, Metadata R. Webhooks désactivés. Installée sur **All repositories** (5 repos kisnco couverts).
+- **Plomberie locale** :
+  - Secrets dans `~/.claude/secrets/` (chmod 700), `.env` + `.private-key.pem` (chmod 600).
+  - `scripts/gh-app-token.sh` : génère un installation token via JWT RS256 signé (durée ~1h).
+  - `scripts/gh-app-bot.sh` : wrapper unique avec sous-commandes `push`, `pr-create` (auto-label `claude-generated`), `exec`, `token`. Convertit l'origin SSH en HTTPS+token à la volée sans toucher la config locale.
+- **Spec créée** : `docs/specs/GITHUB_BOT.md` (archi, secrets, scripts, usage, rotation, ajout d'un nouvel agent).
+
+**Décisions** :
+- 1 App par agent (`kisnlab-<agent>`) → identité distincte sur chaque PR pour traçabilité multi-agents.
+- Auteur des commits reste l'humain — le bot ne change que le pushers et le PR opener.
+- Scripts génériques (`GH_APP_NAME` paramétrable) pour basculer facilement entre Apps.
+
 ### Migration agentique — Phase D : skill OpenClaw `delegate-to-api` + auth Bearer
 
 OpenClaw peut désormais déléguer une tâche à l'agent `dev` de `kisnlab-api` depuis Discord. Phase D câble aussi l'auth Bearer côté API qui était préparée mais non activée en Phase A.
