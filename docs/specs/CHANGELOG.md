@@ -8,6 +8,17 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-08
 
+### Identité bot pour l'agent `dev` — GitHub App `kisnlab-dev`
+
+Provisionnement d'une seconde GitHub App pour l'agent LangGraph `dev` (`services/api/app/agents/dev.py`), suivant la convention `kisnlab-<agent>` actée juste avant.
+
+- **App `kisnlab-dev`** : créée côté `@kisnco`, App ID `3643429`, Installation ID `130547284`. Mêmes permissions que `kisnlab-claude-code` (Contents/PRs/Issues/Workflows R+W, Metadata R). Installée sur **All repositories**. Permet review entre agents (le bot dev peut review les PRs ouvertes par Claude Code et inversement).
+- **Plomberie** : aucun changement de code — les scripts `gh-app-token.sh` et `gh-app-bot.sh` étaient déjà génériques via `GH_APP_NAME`. Secrets ajoutés dans `~/.claude/secrets/kisnlab-dev.{env,private-key.pem}`.
+- **Usage** : `GH_APP_NAME=kisnlab-dev ./scripts/gh-app-bot.sh ...`
+- **Spec mise à jour** : `docs/specs/GITHUB_BOT.md` (section App + tableau des agents).
+
+**Note** : l'agent `dev` tourne dans le container `kisnlab-api`, qui n'a pas accès à `~/.claude/secrets/`. Quand l'agent gagnera des tools git/gh (Phase ultérieure), choisir entre volume mount du `.pem` ou injection via env vars (`GH_APP_PRIVATE_KEY` multi-ligne). Aujourd'hui, le bot est uniquement utilisable depuis le terminal local de Mélodie pour préparer le terrain.
+
 ### Identité bot pour les agents IA — GitHub App `kisnlab-claude-code`
 
 Mise en place d'une identité dédiée pour les PRs ouvertes par Claude Code, afin de permettre l'approbation par un humain (impossible si auteur = self avec branch protection) et préparer un modèle multi-agents.
