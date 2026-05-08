@@ -8,6 +8,19 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-09
 
+### Phase 1 — Reviewer 3-perspectives (PR-2/4)
+
+L'agent `reviewer` analyse une PR GitHub sous 3 angles en parallèle (sécurité / qualité / architecture) puis synthétise. Le diff est récupéré une seule fois et envoyé en bloc `cache_control: ephemeral` aux 3 perspectives → cache hit aux calls 2 et 3, ~½ coût Reviewer.
+
+- **`services/api/app/agents/reviewer.py`** : sub-graph `prepare → fan_out (Send) → 3 perspectives parallèles → synthesize`. `_assess()` envoie `SystemMessage` à 2 blocks (préfixe partagé court + diff cached) puis un `HumanMessage` qui injecte le skill markdown spécifique à la perspective. `with_structured_output(_Assessment)` → Claude renvoie `findings` + `severity`. Fallback `severity=info, findings="erreur LLM ..."` si une perspective plante (pas de cascade rouge sur 1 timeout).
+- **`services/api/app/agents/state.py`** : `ReviewerState` enrichi de `repo`, `pr_number`, `diff` + reducer `Annotated[list[PerspectiveOpinion], operator.add]` pour merger les écritures parallèles des 3 nodes.
+- **`services/api/app/agents/skills/`** : 3 nouveaux fragments markdown — `security_review.md` (secrets, injection, authn/z, crypto), `quality_review.md` (lisibilité, dead code, tests, mutations), `architecture_review.md` (couplage, contrats, breaking changes).
+- **Endpoint `POST /agents/reviewer/run`** : retourne `AgentResponse` avec `metadata = {"severities": {"security": "block", ...}, "perspectives_count": 3}`. Erreur de parsing PR ref → `422` (sémantique), pas `500`.
+- **Parser PR ref** (`_parse_pr_ref`) : 3 formats — URL `https://github.com/owner/repo/pull/N`, raccourci `owner/repo#N`, narratif `#N (in|of|de|du|dans|sur|on) owner/repo`.
+- **Langfuse** : `run_name` distinct par perspective (`reviewer_security`, `reviewer_quality`, `reviewer_architecture`) → 3 traces identifiables côté UI.
+- **Tests** : 64 verts + 1 skipped. Nouveaux : `test_reviewer_agent.py` (13 cas — parser, synthesize, metadata, full graph mocké, vérif `cache_control` sur le diff, run_names, fallback erreur LLM, endpoint 200/422). Adaptations `test_state.py` (+2 cas pour les nouveaux champs runtime).
+- **Doc** : `LANGGRAPH.md` documente le pipeline reviewer + le pattern de prompt caching.
+
 ### Phase 1 — Foundation équipe dev multi-agents (PR-1/4)
 
 Plomberie pour passer de l'agent `dev` solo à l'équipe **Dev + Reviewer**. Aucune feature visible côté API/Discord — refacto pure pour préparer les PRs suivantes (Reviewer en sub-graph, Team supervisor, intégration OpenClaw/Discord).

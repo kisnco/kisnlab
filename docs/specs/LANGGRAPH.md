@@ -25,7 +25,7 @@ OpenClaw reste le point d'entrée Discord. Il délègue à FastAPI les tâches m
 | Agent | Rôle | Modèle | Phase | Endpoint |
 |-------|------|--------|-------|----------|
 | **dev** | Tâches techniques (code, debug, refactor, archi) | `claude-haiku-4-5-20251001` | B (V1) ✅ | `POST /agents/dev/run` |
-| **reviewer** | Review PR multi-perspectives (security/quality/architecture) | `claude-haiku-4-5-20251001` | 1 (Phase 1) ⏳ | `POST /agents/reviewer/run` |
+| **reviewer** | Review PR multi-perspectives (security/quality/architecture) | `claude-haiku-4-5-20251001` | 1 (Phase 1) ✅ | `POST /agents/reviewer/run` |
 | **team** | Supervisor — route vers `dev` ou `reviewer` | `claude-haiku-4-5-20251001` | 1 (Phase 1) ⏳ | `POST /agents/team/run` |
 | **commercial** | Prospects, devis, suivi client | (à définir) | F | `POST /agents/commercial/run` |
 | **admin** | Compta SASU, juridique, factures | (à définir) | F | `POST /agents/admin/run` |
@@ -68,6 +68,50 @@ START → call_claude → END
 Système prompt composé via `load_skills(("dev_base", "github_pr_tools"))`.
 
 > 1 seul node en V1 — extensible vers `intent → tool_use → call_claude` quand des tools (lecture repo, run tests, etc.) seront ajoutés.
+
+---
+
+## Graphe `reviewer` (Phase 1)
+
+```
+START → prepare → (Send fan_out) → assess_security    ┐
+                                 → assess_quality    ─┼→ synthesize → END
+                                 → assess_architecture┘
+```
+
+État : `ReviewerState` (Pydantic — `task`, `repo`, `pr_number`, `diff`, `perspectives` avec reducer `operator.add`, `response`).
+
+**Pattern de coût — prompt caching Anthropic** : `prepare` récupère le diff une seule fois via `gh_pr_diff`. Chaque perspective envoie un `SystemMessage` à 2 blocks :
+
+```python
+[
+    {"type": "text", "text": REVIEWER_SYSTEM_PREFIX},          # bloc 1, partagé court
+    {"type": "text", "text": diff,
+     "cache_control": {"type": "ephemeral"}},                  # bloc 2, partagé long
+]
+```
+
+Le diff étant identique sur les 3 calls, Anthropic le sert depuis le cache aux calls 2 et 3 → coût Reviewer divisé par ~2 sur la portion diff (10x moins cher en cache hit).
+
+Le `HumanMessage` qui suit injecte le skill markdown spécifique (`security_review.md` / `quality_review.md` / `architecture_review.md`) — petit, variable, non caché.
+
+**Fallback** : si une perspective plante (timeout, 5xx Anthropic), elle retourne `severity=info, findings="erreur LLM …"`. Le graphe synthétise quand même avec les 2 autres.
+
+**Tracing Langfuse** : `run_name` distinct par perspective (`reviewer_security`, `reviewer_quality`, `reviewer_architecture`) → 3 traces côté UI Langfuse.
+
+**Endpoint** :
+
+```http
+POST /agents/reviewer/run
+{ "task": "kisnco/kisnlab#7" }
+
+→ 200 { "agent": "reviewer",
+        "response": "# Review …",
+        "metadata": { "severities": {"security": "block", …},
+                      "perspectives_count": 3 } }
+```
+
+Formats de PR ref acceptés : URL GitHub, `owner/repo#N`, narratif `#N (in|of|de|du|dans|sur|on) owner/repo`. Si parse impossible → `422`.
 
 ---
 
@@ -130,7 +174,7 @@ L'agent `dev` est exempt de cette règle (sortie textuelle, pas d'action externe
 
 - [x] Phase B — Agent `dev` (1 node, Haiku, sans tracing)
 - [x] Phase C — Tracing Langfuse via `CallbackHandler` (run_name=`dev_agent`)
-- [ ] Phase 1 — Équipe Dev + Reviewer (PR-1 ✅ foundation, PR-2/3/4 en cours)
+- [ ] Phase 1 — Équipe Dev + Reviewer (PR-1 ✅, PR-2 ✅, PR-3/4 en cours)
 - [ ] Phase 2 — Dev avec tools d'écriture (Codex)
 - [ ] Phase F — `commercial` / `admin` / `comm` + pattern draft Discord
 - [ ] Plus tard — checkpoints Postgres pour reprises longues

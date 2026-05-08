@@ -50,6 +50,15 @@ class TestInternalStates:
         s = ReviewerState(task="t")
         assert s.perspectives == []
         assert s.response == ""
+        assert s.diff == ""
+        assert s.repo is None
+        assert s.pr_number is None
+
+    def test_reviewer_state_carries_runtime_fields(self):
+        s = ReviewerState(task="t", repo="kisnco/kisnlab", pr_number=8, diff="--- a/x")
+        assert s.repo == "kisnco/kisnlab"
+        assert s.pr_number == 8
+        assert s.diff.startswith("---")
 
     def test_perspective_opinion_severity_enum(self):
         op = PerspectiveOpinion(perspective="security", findings="leak", severity="block")
