@@ -8,6 +8,18 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-09
 
+### Phase 1 — Team supervisor (PR-3/4)
+
+L'agent `team` route une tâche utilisateur vers `dev` ou `reviewer` via un appel Claude Haiku avec `with_structured_output(_Route)`. Pipeline `START → route → delegate → END`.
+
+- **`services/api/app/agents/team.py`** : 2 nodes — `route` (LLM Haiku → `_Route(agent: AgentName)`) + `_make_delegate(dev_graph, reviewer_graph)` (factory qui renvoie le node de délégation). Les sub-graphs sont **injectables** dans `build_team_graph(...)` pour faciliter les tests. Fallback `dev` si l'appel LLM plante (timeout / 5xx Anthropic). Trace Langfuse `run_name=team_router`.
+- **`services/api/app/routers/agents.py`** : endpoint `POST /agents/team/run`. `team_graph = build_team_graph(dev_graph=dev_graph, reviewer_graph=reviewer_graph)` réutilise les singletons existants (pas de double compilation). Retourne `metadata={"routed_to": "dev"|"reviewer"}`. `ValueError` propagée par le sub-graph reviewer (parse PR ref) → `422`.
+- **Prompt routeur** : système court explicitant les 2 sous-agents et la **règle de fallback** (« si la tâche n'évoque pas explicitement une PR à reviewer, route vers `dev` »).
+- **Tests** : 72 verts + 7 skipped (dev + team integration). `test_team_agent.py` :
+  - **8 unit tests** : dispatch dev/reviewer, prompt + run_name, fallback erreur LLM, propagation `ValueError`, endpoint 200/422/422-empty.
+  - **6 cas paramétrés d'intégration** (skip sans clé) : 2 review (URL + raccourci), 3 dev (refactor / langage / coroutines), 1 ambigu (fallback `dev`). Couvre review/dev/ambigu/fallback comme demandé.
+- **Doc** : `LANGGRAPH.md` documente le graphe team.
+
 ### Phase 1 — Reviewer 3-perspectives (PR-2/4)
 
 L'agent `reviewer` analyse une PR GitHub sous 3 angles en parallèle (sécurité / qualité / architecture) puis synthétise. Le diff est récupéré une seule fois et envoyé en bloc `cache_control: ephemeral` aux 3 perspectives → cache hit aux calls 2 et 3, ~½ coût Reviewer.
