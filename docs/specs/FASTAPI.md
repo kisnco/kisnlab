@@ -18,15 +18,22 @@ Accessible via Traefik sur `http://api.kisnlab.local`.
 ```
 services/api/
 ├── Dockerfile              # python:3.12-slim + uvicorn
-├── requirements.txt        # fastapi, uvicorn, pytest, httpx
+├── requirements.txt        # fastapi, uvicorn, langgraph, langchain-anthropic
 ├── pyproject.toml          # config pytest
 ├── .dockerignore
 ├── app/
 │   ├── __init__.py
-│   └── main.py             # FastAPI app + /health
+│   ├── main.py             # FastAPI app + /health + include_router
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   └── dev.py          # graphe LangGraph dev (Haiku)
+│   └── routers/
+│       ├── __init__.py
+│       └── agents.py       # POST /agents/dev/run
 └── tests/
     ├── __init__.py
-    └── test_health.py
+    ├── test_health.py
+    └── test_dev_agent.py   # unit + endpoint + intégration skipif
 ```
 
 ---
@@ -35,9 +42,23 @@ services/api/
 
 | Méthode | Path | Réponse | Phase |
 |---------|------|---------|-------|
-| `GET` | `/health` | `{"status": "ok"}` | A |
-| `POST` | `/agents/dev/run` | exécution agent dev (LangGraph) | B |
+| `GET` | `/health` | `{"status": "ok"}` | A ✅ |
+| `POST` | `/agents/dev/run` | `{"agent": "dev", "response": "..."}` | B ✅ |
 | `GET` | `/agents/executions` | historique en mémoire (50 derniers) | C |
+
+### `POST /agents/dev/run`
+
+Body :
+```json
+{ "task": "Fix the build error in service X" }
+```
+
+Réponse :
+```json
+{ "agent": "dev", "response": "..." }
+```
+
+Modèle : `claude-haiku-4-5-20251001`. Détails du graphe : voir `LANGGRAPH.md`.
 
 ---
 
@@ -96,7 +117,7 @@ curl http://api.kisnlab.local/health
 ## Roadmap
 
 - [x] Phase A — Plomberie FastAPI + `/health`
-- [ ] Phase B — Premier agent LangGraph (`dev`, modèle Haiku)
+- [x] Phase B — Premier agent LangGraph (`dev`, modèle Haiku)
 - [ ] Phase C — Tracing Langfuse + historique en mémoire
 - [ ] Phase D — Skill OpenClaw `delegate-to-api`
 - [ ] Phase F (later) — Agents `commercial`, `admin`, `comm` + supervisor

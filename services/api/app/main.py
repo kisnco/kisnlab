@@ -1,6 +1,10 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="KisnLab API", version="0.1.0")
+from app.routers import agents
+
+app = FastAPI(title="KisnLab API", version="0.2.0")
+
+app.include_router(agents.router)
 
 
 @app.get("/health")

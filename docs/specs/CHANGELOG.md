@@ -8,6 +8,23 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-08
 
+### Migration agentique — Phase B : premier agent LangGraph (`dev`)
+
+Premier graphe LangGraph hébergé dans `kisnlab-api`. Endpoint `POST /agents/dev/run` qui appelle Claude Haiku via un graphe à 1 node.
+
+- **`services/api/app/agents/dev.py`** : graphe LangGraph (StateGraph) avec un seul node `call_claude`. État `DevState{task, response}`. Modèle `claude-haiku-4-5-20251001`. System prompt positionne l'agent en bras technique KIS'n Code (français, code anglais, KIS, concis).
+- **`services/api/app/routers/agents.py`** : router FastAPI avec `POST /agents/dev/run` (body `RunRequest{task}`, réponse `RunResponse{agent, response}`). Validation Pydantic (task non vide, ≤ 8000 chars).
+- **`services/api/app/main.py`** : `include_router(agents.router)`, version bumpée 0.1.0 → 0.2.0.
+- **`services/api/requirements.txt`** : ajout `langgraph==0.2.60` et `langchain-anthropic==0.3.1`.
+- **`services/api/tests/test_dev_agent.py`** : 4 tests — unit (mock ChatAnthropic), endpoint mocké, validation 422, intégration réelle (skipif sans `ANTHROPIC_API_KEY` ou clé placeholder).
+- **Spec créée** : `docs/specs/LANGGRAPH.md` (rôle, pattern routing, agents disponibles, graphe `dev` V1, règle validation envois externes, dépendances, roadmap).
+- **Mise à jour** : `FASTAPI.md` (structure étendue + détails route `POST /agents/dev/run` + roadmap).
+
+**Décisions** :
+- 1 node (KIS) plutôt que 2 (`intent → claude`) — extensible plus tard quand des tools arrivent (lecture repo, run tests, gh CLI).
+- Pas de DB, pas de tracing en Phase B (Phase C s'en occupe).
+- Modèle Haiku confirmé par défaut V1, bascule Sonnet agent par agent quand prompts stables.
+
 ### Migration agentique — Phase A : plomberie FastAPI
 
 Démarrage de la migration multi-agents (FastAPI + LangGraph). Phase A livre la **plomberie minimale** : un service Python qui répond `/health` derrière Traefik. Les agents LangGraph arrivent en Phase B.
