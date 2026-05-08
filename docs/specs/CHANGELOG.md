@@ -8,6 +8,18 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-09
 
+### Phase 1 — Pont Discord pour reviewer/team (PR-4/4) — CLÔTURE PHASE 1
+
+Deux nouveaux skills OpenClaw exposent les agents `reviewer` et `team` côté Discord. **Aucune modification de code Python ou de tests**, uniquement skills + doc.
+
+- **`skills/delegate-to-reviewer/SKILL.md`** : skill "passeur de plat" qui appelle `POST /agents/reviewer/run`. Triggers : `/review <PR>`, "review la PR …", "fais une review de …". Surface les `metadata.severities` (security/quality/architecture → block/warn/info) en tête de la réponse Discord. Timeout HTTP 120s (vs 60s pour `delegate-to-api`) car le reviewer fait 3 appels Anthropic en parallèle.
+- **`skills/delegate-to-team/SKILL.md`** : skill "passeur de plat" qui appelle `POST /agents/team/run`. Triggers : `/team <msg>`, "team : …", "équipe dev : …". Affiche `metadata.routed_to` en tête (transparence). Timeout 120s (chaîne complète route + reviewer = ~60s max).
+- **`docs/specs/SKILLS.md`** : table des skills mise à jour, nouvelle section "Pont Discord ↔ kisnlab-api" qui explique quand utiliser lequel des 3 `delegate-to-*`.
+- **`docs/specs/DISCORD.md`** : exemples d'utilisation enrichis pour `#dev` (3 patterns d'invocation).
+- **`docs/specs/LANGGRAPH.md`** : pattern de routing étendu, table des 3 skills passeurs, roadmap Phase 1 cochée.
+
+**Note** : pas de modif `openclaw.json` — les skills sont posés dans `skills/` (bind-mounté sur `/workspace/skills/` côté container). Activation auto au prochain reload OpenClaw. **Pas activé en force** : Mélodie peut tester d'abord en dev.
+
 ### Phase 1 — Team supervisor (PR-3/4)
 
 L'agent `team` route une tâche utilisateur vers `dev` ou `reviewer` via un appel Claude Haiku avec `with_structured_output(_Route)`. Pipeline `START → route → delegate → END`.

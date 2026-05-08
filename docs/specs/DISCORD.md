@@ -78,6 +78,9 @@ Activer **Mode Développeur** : Paramètres utilisateur → Avancé → Mode dé
 |---------|-------------------|
 | `#dev` | `@bot review le fichier Auth.php` |
 | `#dev` | `@bot propose une archi pour [feature]` |
+| `#dev` | `@bot agent dev : explique ce que fait ce code [...]` (skill `delegate-to-api`) |
+| `#dev` | `@bot /review kisnco/kisnlab#42` (skill `delegate-to-reviewer`, retourne 3 perspectives) |
+| `#dev` | `@bot /team peux-tu m'aider sur X ?` (skill `delegate-to-team`, route auto vers dev ou reviewer) |
 | `#commercial` | `@bot fais un devis pour [brief client]` |
 | `#admin` | `@bot génère la facture pour [client] [montant]` |
 | `#comm` | `@bot écris un post LinkedIn sur [sujet]` |

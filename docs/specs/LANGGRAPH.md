@@ -13,10 +13,20 @@ LangGraph est l'orchestrateur multi-agents métier de KisnLab. Il vit dans le se
 ## Pattern de routing
 
 ```
-Discord → OpenClaw (skill delegate-to-api) → kisnlab-api → graphe LangGraph → Claude → réponse
+Discord → OpenClaw (skills delegate-to-*) → kisnlab-api → graphe LangGraph → Claude → réponse
 ```
 
 OpenClaw reste le point d'entrée Discord. Il délègue à FastAPI les tâches métier qui demandent un raisonnement structuré ou plusieurs étapes coordonnées.
+
+3 skills "passeur de plat" côté OpenClaw, un par endpoint :
+
+| Skill | Trigger | Endpoint |
+|-------|---------|----------|
+| `delegate-to-api` | "agent dev : [...]" | `POST /agents/dev/run` |
+| `delegate-to-reviewer` | `/review <PR>` | `POST /agents/reviewer/run` |
+| `delegate-to-team` | `/team <msg>` | `POST /agents/team/run` |
+
+Voir `SKILLS.md` pour les conventions de skills.
 
 ---
 
@@ -204,7 +214,7 @@ L'agent `dev` est exempt de cette règle (sortie textuelle, pas d'action externe
 
 - [x] Phase B — Agent `dev` (1 node, Haiku, sans tracing)
 - [x] Phase C — Tracing Langfuse via `CallbackHandler` (run_name=`dev_agent`)
-- [ ] Phase 1 — Équipe Dev + Reviewer (PR-1 ✅, PR-2 ✅, PR-3 ✅, PR-4 en cours)
+- [x] Phase 1 — Équipe Dev + Reviewer (PR-1 → PR-4 ✅)
 - [ ] Phase 2 — Dev avec tools d'écriture (Codex)
 - [ ] Phase F — `commercial` / `admin` / `comm` + pattern draft Discord
 - [ ] Plus tard — checkpoints Postgres pour reprises longues
