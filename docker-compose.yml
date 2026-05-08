@@ -305,6 +305,11 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       KISNLAB_API_TOKEN: ${KISNLAB_API_TOKEN}
       LOG_LEVEL: INFO
+      GH_APP_NAME: kisnlab-dev
+    volumes:
+      # Bot GitHub kisnlab-dev (read-only). Fallback env vars supportés si non monté.
+      - ${HOME}/.claude/secrets/kisnlab-dev.env:/secrets/kisnlab-dev.env:ro
+      - ${HOME}/.claude/secrets/kisnlab-dev.private-key.pem:/secrets/kisnlab-dev.private-key.pem:ro
     networks:
       - kisnlab-net
     labels:

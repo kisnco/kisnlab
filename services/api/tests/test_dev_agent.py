@@ -10,19 +10,41 @@ client = TestClient(app)
 
 
 def test_dev_agent_unit_with_mock():
-    """Le graphe doit retourner la réponse du LLM (mock)."""
+    """Le graphe doit retourner la réponse finale de l'agent ReAct (mock)."""
     from app.agents.dev import build_dev_graph
 
-    with patch("app.agents.dev.ChatAnthropic") as mock_llm_class:
-        mock_llm = MagicMock()
-        mock_llm.invoke.return_value = MagicMock(content="mocked claude reply")
-        mock_llm_class.return_value = mock_llm
+    with patch("app.agents.dev.create_react_agent") as mock_react, \
+         patch("app.agents.dev.ChatAnthropic") as mock_llm_class:
+        fake_message = MagicMock()
+        fake_message.content = "mocked claude reply"
+        mock_react_agent = MagicMock()
+        mock_react_agent.invoke.return_value = {"messages": [fake_message]}
+        mock_react.return_value = mock_react_agent
 
         graph = build_dev_graph()
         result = graph.invoke({"task": "refactor X", "response": ""})
 
         assert result["response"] == "mocked claude reply"
         mock_llm_class.assert_called_once()
+        mock_react.assert_called_once()
+
+
+def test_dev_agent_flattens_block_content():
+    """Si Claude renvoie content sous forme de blocks (tool calling), on extrait le texte."""
+    from app.agents.dev import build_dev_graph
+
+    with patch("app.agents.dev.create_react_agent") as mock_react, \
+         patch("app.agents.dev.ChatAnthropic"):
+        fake_message = MagicMock()
+        fake_message.content = [{"type": "text", "text": "bloc1 "}, {"type": "text", "text": "bloc2"}]
+        mock_agent = MagicMock()
+        mock_agent.invoke.return_value = {"messages": [fake_message]}
+        mock_react.return_value = mock_agent
+
+        graph = build_dev_graph()
+        result = graph.invoke({"task": "test", "response": ""})
+
+        assert result["response"] == "bloc1 bloc2"
 
 
 def test_run_dev_agent_endpoint_with_mock():
