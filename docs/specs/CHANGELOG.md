@@ -8,6 +8,18 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-08
 
+### Migration agentique — Phase D : skill OpenClaw `delegate-to-api` + auth Bearer
+
+OpenClaw peut désormais déléguer une tâche à l'agent `dev` de `kisnlab-api` depuis Discord. Phase D câble aussi l'auth Bearer côté API qui était préparée mais non activée en Phase A.
+
+- **`skills/delegate-to-api/SKILL.md`** : nouveau skill (channel `#dev`, LLM Haiku, pas d'`approval` — appel inter-service interne au stack). Trigger sur "délègue dev :", "agent dev :", "demande à dev de". Curl POST vers `http://kisnlab-api:8000/agents/dev/run` avec Bearer, body construit via `jq -nc --arg` (JSON-safe), timeout 60s, restitution brute de la réponse dans le channel.
+- **Auth Bearer côté FastAPI** : `services/api/app/auth.py` (dependency `verify_token`), router `/agents/*` protégé via `dependencies=[Depends(verify_token)]`. `/health` reste public. Codes : 200 OK, 401 token manquant/invalide, 503 si `KISNLAB_API_TOKEN` non configuré côté serveur.
+- **`docker-compose.yml`** : ajout `KISNLAB_API_TOKEN: ${KISNLAB_API_TOKEN}` dans `services.openclaw.environment` (seul service existant touché — modif minimale d'une ligne d'env).
+- **Tests** : 5 nouveaux tests d'auth (sans token, mauvais token, token valide, `/health` public, 503 si token serveur absent). `services/api/tests/conftest.py` : fixture autouse `disable_auth` (override par défaut pour les tests existants) + fixture `enable_auth` (opt-in pour les tests d'auth).
+- **Specs** : `OPENCLAW.md` (nouvelle section "Délégation à FastAPI / LangGraph"), `SKILLS.md` (ligne `delegate-to-api`), `FASTAPI.md` (section "Authentification").
+
+OpenClaw reste l'agent IA conversationnel principal sur Discord — la délégation est une capacité ajoutée, pas un remplacement de ses skills existants. Les agents `commercial`/`admin`/`comm`/`supervisor` arriveront en Phase F.
+
 ### Migration agentique — Phase B : premier agent LangGraph (`dev`)
 
 Premier graphe LangGraph hébergé dans `kisnlab-api`. Endpoint `POST /agents/dev/run` qui appelle Claude Haiku via un graphe à 1 node.

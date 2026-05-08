@@ -36,6 +36,7 @@ approval: required   # uniquement si action externe (envoi, publication...)
 | `comm-linkedin` | #comm | Haiku | ✅ Oui | ✅ Prêt |
 | `strategie-conseiller` | #strategie | Sonnet | ✅ Oui | ✅ Prêt |
 | `strategie-veille` | #strategie | Haiku | Non | ✅ Prêt |
+| `delegate-to-api` | #dev | Haiku | Non | ✅ Prêt |
 
 ---
 

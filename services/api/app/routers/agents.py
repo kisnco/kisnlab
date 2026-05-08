@@ -1,9 +1,14 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.agents.dev import build_dev_graph
+from app.auth import verify_token
 
-router = APIRouter(prefix="/agents", tags=["agents"])
+router = APIRouter(
+    prefix="/agents",
+    tags=["agents"],
+    dependencies=[Depends(verify_token)],
+)
 
 dev_graph = build_dev_graph()
 

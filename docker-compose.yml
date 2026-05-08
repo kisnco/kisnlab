@@ -170,6 +170,8 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
       LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL}
+      # Auth pour deleguer a kisnlab-api (skill delegate-to-api, Phase D)
+      KISNLAB_API_TOKEN: ${KISNLAB_API_TOKEN}
     volumes:
       - ./config/openclaw:/workspace
       - ./skills:/workspace/skills

@@ -73,6 +73,30 @@ Modèle : `claude-haiku-4-5-20251001`. Détails du graphe : voir `LANGGRAPH.md`.
 
 ---
 
+## Authentification
+
+Toutes les routes `/agents/*` sont protégées par un Bearer token (Phase D).
+
+```bash
+curl -X POST http://api.kisnlab.local/agents/dev/run \
+  -H "Authorization: Bearer $KISNLAB_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"task": "..."}'
+```
+
+Le token est lu côté serveur depuis la variable d'env `KISNLAB_API_TOKEN`.
+
+| Cas | Code |
+|-----|------|
+| Token correct | 200 |
+| Token absent ou format invalide (pas de `Bearer `) | 401 |
+| Token incorrect | 401 |
+| `KISNLAB_API_TOKEN` non configuré côté serveur | 503 |
+
+`/health` reste public (pas d'auth) — utile pour le healthcheck Traefik et les sondes externes.
+
+---
+
 ## Réseau Docker
 
 - Réseau : `kisnlab-net` uniquement (pas de DinD)
