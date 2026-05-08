@@ -1,50 +1,36 @@
 """LangGraph dev agent: ReAct loop with GitHub PR review tools.
 
-Public API ``build_dev_graph()`` keeps the ``{"task", "response"}`` shape so
-the router/tests stay untouched. Inside, we delegate to ``create_react_agent``
-which handles the tool-calling loop.
+State is the Pydantic ``DevState`` from ``app.agents.state``. The system
+prompt is composed from markdown skill fragments via ``load_skills``.
 """
 
 from __future__ import annotations
 
 import logging
 import os
-from typing import Any, TypedDict
+from typing import Any
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import create_react_agent
 
+from app.agents.skills import load_skills
+from app.agents.state import DevState
 from app.agents.tools.github_tools import GITHUB_PR_TOOLS
 
 logger = logging.getLogger(__name__)
 
 MODEL = "claude-haiku-4-5-20251001"
-
-SYSTEM_PROMPT = (
-    "Tu es l'agent dev de KisnLab, le bras technique de KIS'n Code. "
-    "Tu reponds en francais. Le code que tu produis est en anglais. "
-    "Tu vises la solution la plus simple qui fonctionne (philosophie KIS). "
-    "Tu es concis : pas de blabla, droit au but.\n\n"
-    "Outils GitHub disponibles :\n"
-    "- gh_pr_list(repo, state) : lister les PRs.\n"
-    "- gh_pr_get(repo, number) : metadata d'une PR.\n"
-    "- gh_pr_diff(repo, number) : diff unifie.\n"
-    "- gh_pr_review(repo, number, event, body) : APPROVE / REQUEST_CHANGES / COMMENT.\n"
-    "- gh_pr_comment(repo, number, body) : simple commentaire.\n"
-    "Pour reviewer : lis d'abord le diff (gh_pr_diff), puis poste une review "
-    "structuree. Approuve seulement si tu n'as pas de remarque bloquante."
-)
+DEV_SKILLS = ("dev_base", "github_pr_tools")
 
 
-class DevState(TypedDict):
-    task: str
-    response: str
+def _build_system_prompt() -> str:
+    return load_skills(DEV_SKILLS)
 
 
 def _build_langfuse_callbacks() -> list[Any]:
-    """Return a list with one Langfuse CallbackHandler if Langfuse is reachable.
+    """Return ``[CallbackHandler()]`` if Langfuse is reachable, else ``[]``.
 
     Defensive: missing env vars OR import failure (lib absent / network error)
     yields ``[]`` so the agent stays usable without observability.
@@ -61,6 +47,7 @@ def _build_langfuse_callbacks() -> list[Any]:
 
 
 _LANGFUSE_CALLBACKS: list[Any] = _build_langfuse_callbacks()
+_SYSTEM_PROMPT: str = _build_system_prompt()
 
 
 def call_claude(state: DevState) -> DevState:
@@ -69,8 +56,8 @@ def call_claude(state: DevState) -> DevState:
     result = react_agent.invoke(
         {
             "messages": [
-                SystemMessage(content=SYSTEM_PROMPT),
-                ("user", state["task"]),
+                SystemMessage(content=_SYSTEM_PROMPT),
+                ("user", state.task),
             ]
         },
         config={"callbacks": _LANGFUSE_CALLBACKS, "run_name": "dev_agent"},
@@ -83,7 +70,7 @@ def call_claude(state: DevState) -> DevState:
             block.get("text", "") if isinstance(block, dict) else str(block)
             for block in content
         )
-    return {"task": state["task"], "response": content}
+    return DevState(task=state.task, response=content)
 
 
 def build_dev_graph():

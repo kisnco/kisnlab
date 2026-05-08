@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
 
 from app.agents.dev import build_dev_graph
+from app.agents.state import AgentRequest, AgentResponse, DevState
 from app.auth import verify_token
 
 router = APIRouter(
@@ -13,16 +13,8 @@ router = APIRouter(
 dev_graph = build_dev_graph()
 
 
-class RunRequest(BaseModel):
-    task: str = Field(..., min_length=1, max_length=8000)
-
-
-class RunResponse(BaseModel):
-    agent: str
-    response: str
-
-
-@router.post("/dev/run", response_model=RunResponse)
-def run_dev_agent(req: RunRequest) -> RunResponse:
-    result = dev_graph.invoke({"task": req.task, "response": ""})
-    return RunResponse(agent="dev", response=result["response"])
+@router.post("/dev/run", response_model=AgentResponse)
+def run_dev_agent(req: AgentRequest) -> AgentResponse:
+    result = dev_graph.invoke(DevState(task=req.task))
+    response_text = result["response"] if isinstance(result, dict) else result.response
+    return AgentResponse(agent="dev", response=response_text)
