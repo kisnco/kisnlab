@@ -6,6 +6,31 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ---
 
+## 2026-05-08
+
+### Migration agentique — Phase A : plomberie FastAPI
+
+Démarrage de la migration multi-agents (FastAPI + LangGraph). Phase A livre la **plomberie minimale** : un service Python qui répond `/health` derrière Traefik. Les agents LangGraph arrivent en Phase B.
+
+- **Nouveau service** : `kisnlab-api` (image `python:3.12-slim` build local depuis `services/api/`). Réseau `kisnlab-net` uniquement (pas de DinD, pas de Postgres). Exposé via Traefik sur `http://api.kisnlab.local`.
+- **`services/api/`** : `Dockerfile` (uvicorn), `requirements.txt` (fastapi, uvicorn, pydantic, pytest, httpx), `app/main.py` (un seul endpoint `GET /health` → `{"status":"ok"}`), test pytest `tests/test_health.py`.
+- **`docker-compose.yml`** : ajout du service `kisnlab-api` entre `rsshub` et `clickhouse`.
+- **`.env.example`** : ajout `KISNLAB_API_TOKEN` (Bearer pour auth OpenClaw → API, à générer via `openssl rand -hex 32`).
+- **`/etc/hosts`** : ajout `127.0.0.1 api.kisnlab.local`.
+- **Spec créée** : `docs/specs/FASTAPI.md` (rôle, structure, routes V1, env, commandes, roadmap).
+- **Mises à jour** : `CLAUDE.md` § Stack active, `STACK.md` § Services + /etc/hosts.
+
+**Décisions** :
+- pip + `requirements.txt` plutôt que poetry/uv (KIS, image légère, alignement avec le reste du projet).
+- Pas de cockpit web (Langfuse couvre déjà l'observabilité).
+- Pas de DB en V1 (historique en mémoire, ajouté plus tard si besoin).
+- 1 seul agent (`dev`) en V1 — `commercial`/`admin`/`comm` reportés en Phase F.
+- Branche dédiée `feat/fastapi-langgraph` depuis `dev`.
+
+**Phase 2 Langfuse OTel toujours bloquée** — la Phase A n'en dépend pas, le tracing sera branché en Phase C avec encaissement silencieux du SDK si Langfuse n'est pas opérationnel.
+
+---
+
 ## 2026-04-26
 
 ### Pipeline veille — RSSHub + workflow n8n `strategie-publier-veille`

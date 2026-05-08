@@ -31,7 +31,7 @@ Boîte de développement & conseil.
 Stack IA auto-hébergée pour piloter KIS'n Code depuis Discord.
 **Lire `docs/specs/` avant toute action.**
 
-### Stack active (2026-04-19)
+### Stack active (2026-05-08)
 
 | Service | Image | Accès |
 |---------|-------|-------|
@@ -42,6 +42,7 @@ Stack IA auto-hébergée pour piloter KIS'n Code depuis Discord.
 | n8n | n8nio/n8n:latest | http://n8n.kisnlab.local |
 | ClickHouse | clickhouse/clickhouse-server:24.12 | port 8123 (interne) |
 | Langfuse v3 | langfuse/langfuse:3 | http://langfuse.kisnlab.local |
+| KisnLab API | python:3.12-slim (build local) | http://api.kisnlab.local |
 
 ### Faits importants sur OpenClaw
 

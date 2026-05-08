@@ -174,7 +174,7 @@ services:
       - ./config/openclaw:/workspace
       - ./skills:/workspace/skills
       - ./volumes/openclaw:/data
-      # Agent workspace (bootstrap files USER.md, SOUL.md, AGENTS.md, etc. injectés
+      # Agent workspace (boopoutstrap files USER.md, SOUL.md, AGENTS.md, etc. injectés
       # dans le system prompt). Bind-mounté pour persister les édits manuels.
       - ./volumes/openclaw-agent-workspace:/home/node/.openclaw/workspace
       # Repo monté en LECTURE SEULE — les modifs passent par /workspace/work + PR GitOps
@@ -287,6 +287,28 @@ services:
       start_period: 30s
     networks:
       - kisnlab-net
+
+  # ---------------------------------------------------------------------------
+  # KISNLAB-API — FastAPI (V1 : /health uniquement)
+  # Phase A de la migration agentique : plomberie. LangGraph arrive en Phase B.
+  # Accès    : http://api.kisnlab.local
+  # Réseau   : kisnlab-net (pas de DinD, pas de Postgres en V1)
+  # ---------------------------------------------------------------------------
+  kisnlab-api:
+    build:
+      context: ./services/api
+    container_name: kisnlab-api
+    restart: unless-stopped
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      KISNLAB_API_TOKEN: ${KISNLAB_API_TOKEN}
+      LOG_LEVEL: INFO
+    networks:
+      - kisnlab-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kisnlab-api.rule=Host(`api.kisnlab.local`)"
+      - "traefik.http.services.kisnlab-api.loadbalancer.server.port=8000"
 
   # ---------------------------------------------------------------------------
   # CLICKHOUSE — Moteur analytique pour Langfuse v3
