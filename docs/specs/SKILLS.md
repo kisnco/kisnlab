@@ -37,6 +37,8 @@ approval: required   # uniquement si action externe (envoi, publication...)
 | `strategie-conseiller` | #strategie | Sonnet | ✅ Oui | ✅ Prêt |
 | `strategie-veille` | #strategie | Haiku | Non | ✅ Prêt |
 | `delegate-to-api` | #dev | Haiku | Non | ✅ Prêt |
+| `delegate-to-reviewer` | #dev | Haiku | Non | ✅ Prêt |
+| `delegate-to-team` | #dev | Haiku | Non | ✅ Prêt |
 
 ---
 
@@ -79,6 +81,25 @@ approval: required   # uniquement si action externe (envoi, publication...)
 |-------|-------------|-----|----------|
 | `strategie-pricing` | Analyse et recommandation de tarifs | Sonnet | P2 |
 | `strategie-bizdev` | Identification d'opportunités business | Sonnet | P3 |
+
+---
+
+## Pont Discord ↔ kisnlab-api (delegate-to-*)
+
+3 skills routent les tâches Discord vers FastAPI/LangGraph. Tous **passeurs de plat** — pas de raisonnement OpenClaw par-dessus.
+
+| Skill | Endpoint API | Trigger Discord | Quand l'utiliser |
+|-------|--------------|-----------------|------------------|
+| `delegate-to-api` | `POST /agents/dev/run` | "agent dev : [...]" | Tâche dev claire — aucun surcoût de routage. |
+| `delegate-to-reviewer` | `POST /agents/reviewer/run` | `/review <PR>` | Review multi-perspectives sur une PR identifiée. |
+| `delegate-to-team` | `POST /agents/team/run` | `/team <msg>` | Pas sûre du sous-agent — laisse le superviseur Haiku décider (+1 call LLM ~0.001¢). |
+
+Format de réponse Discord standardisé :
+- `delegate-to-reviewer` affiche en tête le mapping `severities` (security/quality/architecture → block/warn/info).
+- `delegate-to-team` affiche en tête `routed_to` (dev | reviewer).
+- Tous les 3 rapportent le contenu de l'agent **sans reformatage**.
+
+Voir aussi `LANGGRAPH.md` pour le détail des graphes côté API.
 
 ---
 
