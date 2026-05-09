@@ -8,8 +8,10 @@ _Source de vérité pour la configuration Discord de KisnLab._
 
 - **Nom** : KisnLab (serveur privé, usage solo)
 - **Accès** : 2 bots distincts, tous les deux restreints à `DISCORD_YOUR_USER_ID` :
-  - **`KisnLab Bot`** (Kael) — OpenClaw, skills généralistes (admin, commercial, comm, stratégie). Allowlist via `allowedUsers` dans `openclaw.json`.
-  - **`KisnLab Dev Team`** — bot Python dédié (`services/dev-bot/`), forwarde chaque mention à `POST /agents/team/run`. Allowlist en dur dans `main.py` via `DISCORD_YOUR_USER_ID`.
+  - **`KisnLab Bot`** (display name **`Kael`** sur le serveur) — OpenClaw, skills généralistes (admin, commercial, comm, stratégie). Allowlist via `allowedUsers` dans `openclaw.json`.
+  - **`KisnLab Dev Team`** (display name **`Dev`** sur le serveur) — bot Python dédié (`services/dev-bot/`), forwarde chaque mention à `POST /agents/team/run`. Allowlist en dur dans `main.py` via `DISCORD_YOUR_USER_ID`.
+
+> Les *application names* (Discord Developer Portal) restent `KisnLab Bot` et `KisnLab Dev Team` — ce sont des identités stables. Le *display name* sur le serveur (`Kael`, `Dev`) est cosmétique et peut changer.
 
 ---
 
@@ -83,11 +85,11 @@ Activer **Mode Développeur** : Paramètres utilisateur → Avancé → Mode dé
 
 | Channel | Exemple de message |
 |---------|-------------------|
-| `#dev` | `@KisnLab Dev Team explique ce que fait ce code [...]` → route auto vers `dev` |
-| `#dev` | `@KisnLab Dev Team review la PR kisnco/kisnlab#42` → route auto vers `reviewer` (3 perspectives) |
-| `#dev` | `@KisnLab Bot review le fichier Auth.php` (skill OpenClaw `dev-reviewer`, snippet collé) |
-| `#dev` | `@KisnLab Bot propose une archi pour [feature]` (skill OpenClaw `dev-architect`) |
-| `#commercial` | `@KisnLab Bot fais un devis pour [brief client]` |
+| `#dev` | `@Dev explique ce que fait ce code [...]` → route auto vers `dev` |
+| `#dev` | `@Dev review la PR kisnco/kisnlab#42` → route auto vers `reviewer` (3 perspectives) |
+| `#dev` | `@Kael review le fichier Auth.php` (skill OpenClaw `dev-reviewer`, snippet collé) |
+| `#dev` | `@Kael propose une archi pour [feature]` (skill OpenClaw `dev-architect`) |
+| `#commercial` | `@Kael fais un devis pour [brief client]` |
 | `#admin` | `@bot génère la facture pour [client] [montant]` |
 | `#comm` | `@bot écris un post LinkedIn sur [sujet]` |
 | `#strategie` | `@bot dois-je accepter cette mission à [tarif] ?` |

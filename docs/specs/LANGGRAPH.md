@@ -13,7 +13,7 @@ LangGraph est l'orchestrateur multi-agents métier de KisnLab. Il vit dans le se
 ## Pattern de routing
 
 ```
-Discord (@KisnLab Dev Team) → kisnlab-dev-bot → kisnlab-api (/agents/team/run)
+Discord (@Dev) → kisnlab-dev-bot → kisnlab-api (/agents/team/run)
        → team supervisor (route LLM Haiku) → dev | reviewer → Claude → réponse
 ```
 

@@ -87,8 +87,8 @@ approval: required   # uniquement si action externe (envoi, publication...)
 
 Conséquence : Mélodie parle à **deux entités distinctes** dans Discord :
 
-- `@KisnLab Bot` (Kael) → skills OpenClaw généralistes (admin, commercial, comm, stratégie, etc.).
-- `@KisnLab Dev Team` → tâches techniques (code, debug, archi) et reviews de PR.
+- `@Kael` (application `KisnLab Bot`) → skills OpenClaw généralistes (admin, commercial, comm, stratégie, etc.).
+- `@Dev` (application `KisnLab Dev Team`) → tâches techniques (code, debug, archi) et reviews de PR.
 
 Voir `DISCORD.md` pour la config bot et `LANGGRAPH.md` pour les graphes côté API.
 
