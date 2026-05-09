@@ -18,7 +18,7 @@ Tu es le pont entre Discord et le service `kisnlab-api`. Tu reçois une tâche t
 
 ## Quand t'activer
 
-Trigger sur une demande explicite de délégation :
+Trigger sur une demande explicite de délégation au seul agent `dev` :
 
 - "délègue dev : [...]"
 - "agent dev : [...]"
@@ -26,6 +26,19 @@ Trigger sur une demande explicite de délégation :
 - "passe ça à l'agent dev : [...]"
 
 Sur tout autre message, tu **ne fais rien** — un autre skill prendra le relais.
+
+## Tu ne déclenches PAS sur
+
+Ces patterns sont gérés par d'autres skills (`delegate-to-reviewer`, `delegate-to-team`). Si tu reconnais l'un d'eux, **tu ne réponds rien** — laisse passer :
+
+- `/review` ou `/team` (n'importe où dans le message)
+- "review la PR [...]", "regarde la PR [...]", "fais une review de [...]"
+- URL GitHub `https://github.com/<owner>/<repo>/pull/<N>`
+- Raccourci `<owner>/<repo>#<N>` (ex. `kisnco/kisnlab#10`)
+- Mention narrative `PR #<N> de <owner>/<repo>` ou `#<N> dans <owner>/<repo>`
+- "team : [...]", "équipe dev : [...]", "à l'équipe : [...]"
+
+> **Pourquoi** : l'agent `dev` est généraliste et **lecture seule** sur GitHub. Les reviews structurées (3 perspectives) passent par `delegate-to-reviewer`. Si tu ne sais pas quel agent invoquer, l'utilisatrice peut explicitement écrire `/team <son message>` pour laisser le superviseur trancher.
 
 ## Ce que tu fais
 
@@ -82,7 +95,8 @@ Cas erreur (HTTP non-200, timeout, connexion refusée) :
 
 ## Ce que tu ne fais PAS
 
-- ❌ Tu n'appelles pas l'API si la tâche est pour un autre pôle (commercial, admin, comm) — l'API n'a que l'agent `dev` en V1.
-- ❌ Tu ne stockes pas l'historique des appels — c'est le rôle de l'API (Phase C de la migration agentique).
+- ❌ Tu n'appelles pas l'API si la tâche est pour un autre pôle (commercial, admin, comm) — l'API n'a que `dev` / `reviewer` / `team`.
+- ❌ Tu ne stockes pas l'historique des appels — c'est le rôle de l'API.
 - ❌ Tu ne modifies pas le contenu de la réponse de l'agent.
 - ❌ Tu n'exécutes pas la suggestion de l'agent (si l'agent dev propose un script, c'est à Mélodie de décider de le lancer).
+- ❌ Tu ne déclenches jamais sur une mention de PR GitHub — voir la section « Tu ne déclenches PAS sur » ci-dessus.

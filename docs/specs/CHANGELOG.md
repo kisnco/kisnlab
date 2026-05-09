@@ -8,6 +8,16 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-09
 
+### Fix — Agent dev en lecture seule + triggers `delegate-to-api` resserrés
+
+Suite à un test Discord où la commande `review la PR #10 de kisnco/kisnlab` a déclenché `delegate-to-api` (au lieu de `delegate-to-reviewer`) **et** où l'agent dev a posté une vraie review GitHub `REQUEST_CHANGES` sans validation manuelle — violation directe de la règle « actions externes ⇒ approval requis ».
+
+- **`services/api/app/agents/tools/github_tools.py`** : `GITHUB_PR_TOOLS` réduit aux outils **lecture seule** (`gh_pr_list`, `gh_pr_get`, `gh_pr_diff`). `gh_pr_review` et `gh_pr_comment` sont déplacés dans `GITHUB_PR_WRITE_TOOLS` (défini mais non exposé à l'agent dev). L'agent dev ne peut plus écrire sur GitHub. Si une publication automatique est un jour souhaitée, elle passera par un skill dédié avec `approval: required`.
+- **`services/api/app/agents/skills/github_pr_tools.md`** : prompt système ré-écrit. Plus aucune instruction « poste une review structurée » ; le skill explicite « Tu **ne postes jamais** sur GitHub : tu n'as pas d'outil d'écriture ».
+- **`skills/delegate-to-api/SKILL.md`** : nouvelle section « Tu ne déclenches PAS sur » qui exclut explicitement les patterns gérés par `delegate-to-reviewer` et `delegate-to-team` (`/review`, `/team`, URL `github.com/.../pull/N`, raccourci `owner/repo#N`, narratif). Évite que `delegate-to-api` continue d'attraper les commandes destinées aux nouveaux skills.
+- **Tests** : 72 verts + 7 skipped. Aucune régression — les tests `test_gh_pr_review` et `test_gh_pr_comment` continuent de tester les fonctions individuellement (toujours définies, juste retirées du tool list par défaut).
+- **Note opérationnelle** : la review hallucinée postée sur PR #10 (déjà mergée) reste visible sur GitHub. Aucune action requise — la PR est mergée, le commentaire est inoffensif. Pas de rollback.
+
 ### Phase 1 — Pont Discord pour reviewer/team (PR-4/4) — CLÔTURE PHASE 1
 
 Deux nouveaux skills OpenClaw exposent les agents `reviewer` et `team` côté Discord. **Aucune modification de code Python ou de tests**, uniquement skills + doc.
