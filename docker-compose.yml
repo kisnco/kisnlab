@@ -344,6 +344,26 @@ services:
       - "traefik.http.services.kisnlab-api.loadbalancer.server.port=8000"
 
   # ---------------------------------------------------------------------------
+  # KISNLAB-DEV-BOT — Bot Discord "KisnLab Dev Team" (identité distincte de Kael)
+  # Listener qui transmet chaque mention à POST /agents/team/run.
+  # ---------------------------------------------------------------------------
+  kisnlab-dev-bot:
+    build:
+      context: ./services/dev-bot
+    container_name: kisnlab-dev-bot
+    restart: unless-stopped
+    environment:
+      DISCORD_DEV_BOT_TOKEN: ${DISCORD_DEV_BOT_TOKEN}
+      DISCORD_YOUR_USER_ID: ${DISCORD_YOUR_USER_ID}
+      KISNLAB_API_URL: http://kisnlab-api:8000
+      KISNLAB_API_TOKEN: ${KISNLAB_API_TOKEN}
+      LOG_LEVEL: INFO
+    depends_on:
+      - kisnlab-api
+    networks:
+      - kisnlab-net
+
+  # ---------------------------------------------------------------------------
   # CLICKHOUSE — Moteur analytique pour Langfuse v3
   # ---------------------------------------------------------------------------
   clickhouse:

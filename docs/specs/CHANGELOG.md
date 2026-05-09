@@ -8,6 +8,18 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-09
 
+### Architecture — Bot Discord dédié à la dev team (séparation Kael ↔ Dev Team)
+
+Suite à la persistence du bug de skill matching (`delegate-to-api` capturait les commandes destinées à `delegate-to-reviewer`/`delegate-to-team` malgré le Fix 2 sur les triggers), refonte de l'entrée Discord pour la dev team. L'équipe dev a maintenant **sa propre identité Discord** (bot `KisnLab Dev Team`), distincte de Kael (OpenClaw).
+
+- **Nouveau service `kisnlab-dev-bot`** (`services/dev-bot/`) : listener Python `discord.py` ~120 LOC. Écoute uniquement les mentions du bot Dev Team venant de l'utilisateur allowlisté, transmet chaque tâche à `POST /agents/team/run` (le superviseur LangGraph route ensuite vers `dev` ou `reviewer`). Réponse postée en thread reply Discord avec préfixe `[dev]` ou `[reviewer]`. Long output découpé en chunks Discord-friendly (2000 chars max, coupe préférée sur saut de ligne).
+- **`services/dev-bot/Dockerfile`** : image Python 3.12-slim, déps minimales (`discord.py==2.4.0`, `httpx==0.27.2`).
+- **`docker-compose.yml`** : nouveau service `kisnlab-dev-bot` (`depends_on: kisnlab-api`, pas de Traefik — pas d'endpoint HTTP exposé).
+- **`.env.example`** : nouvelle var `DISCORD_DEV_BOT_TOKEN` documentée.
+- **Suppression côté Kael** des 3 skills `delegate-to-api`, `delegate-to-reviewer`, `delegate-to-team` — Kael n'orchestre plus rien vers FastAPI. Séparation nette : Kael pour le généraliste (admin/comm/commercial/stratégie), Dev Team pour les tâches techniques.
+- **Tests** : 11 verts pour les helpers du bot (`_strip_mention`, `_format_response` avec split intelligent sur saut de ligne, fallback hard cut). Tests `kisnlab-api` inchangés (72 verts + 7 skipped).
+- **Docs** : `DISCORD.md` (2 bots, configuration séparée), `LANGGRAPH.md` (nouveau pattern de routing, agent dev correctement décrit comme read-only), `SKILLS.md` (suppression skills + nouvelle section "Pont Discord ↔ kisnlab-api"), `CLAUDE.md` (table stack étendue).
+
 ### Fix — Agent dev en lecture seule + triggers `delegate-to-api` resserrés
 
 Suite à un test Discord où la commande `review la PR #10 de kisnco/kisnlab` a déclenché `delegate-to-api` (au lieu de `delegate-to-reviewer`) **et** où l'agent dev a posté une vraie review GitHub `REQUEST_CHANGES` sans validation manuelle — violation directe de la règle « actions externes ⇒ approval requis ».
