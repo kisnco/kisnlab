@@ -110,4 +110,9 @@ def gh_pr_comment(repo: str, number: int, body: str) -> str:
     return f"Commentaire poste (id={result.get('id')})."
 
 
-GITHUB_PR_TOOLS = [gh_pr_list, gh_pr_get, gh_pr_diff, gh_pr_review, gh_pr_comment]
+# Read-only tools — exposed by default to the dev agent.
+# Write tools (gh_pr_review / gh_pr_comment) are intentionally *excluded* from
+# this list: posting on a PR is an external action and must go through an
+# explicit approval-gated skill, never through the generalist dev agent.
+GITHUB_PR_TOOLS = [gh_pr_list, gh_pr_get, gh_pr_diff]
+GITHUB_PR_WRITE_TOOLS = [gh_pr_review, gh_pr_comment]
