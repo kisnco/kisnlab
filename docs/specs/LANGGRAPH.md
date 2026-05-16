@@ -58,6 +58,10 @@ Chaque graphe LangGraph utilise un state Pydantic dédié : `DevState`, `Reviewe
 
 Fragments markdown injectés dans les system prompts. API : `load_skills(["dev_base", "github_pr_tools"]) -> str` (concaténation avec séparateur `---`, fail-fast si fragment manquant). Permet de partager la base d'identité entre sous-agents et de versionner les fragments indépendamment du code Python.
 
+## Observabilité (`app/agents/observability.py`)
+
+Singleton `LANGFUSE_CALLBACKS` construit une seule fois à l'import du module — partagé entre `dev`, `reviewer` et `team`. Si `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` manquent ou si l'import `langfuse.langchain` échoue, on retourne `[]` (dégradation gracieuse, agents restent opérationnels sans tracing). Le team supervisor propage `metadata={"routed_to": ..., "routed_from": "team"}` dans le `config` des sub-graphs — visible côté trace Langfuse pour filtrer les runs passés par le router.
+
 ---
 
 ## Graphe `dev` (V1)

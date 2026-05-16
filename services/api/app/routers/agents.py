@@ -8,6 +8,7 @@ from app.agents.state import (
     DevState,
     ReviewerState,
     TeamState,
+    read_field,
 )
 from app.agents.team import build_team_graph
 from app.auth import verify_token
@@ -23,15 +24,10 @@ reviewer_graph = build_reviewer_graph()
 team_graph = build_team_graph(dev_graph=dev_graph, reviewer_graph=reviewer_graph)
 
 
-def _read(result, field: str):
-    """LangGraph returns either a dict or the state object; normalize."""
-    return result[field] if isinstance(result, dict) else getattr(result, field)
-
-
 @router.post("/dev/run", response_model=AgentResponse)
 def run_dev_agent(req: AgentRequest) -> AgentResponse:
     result = dev_graph.invoke(DevState(task=req.task))
-    return AgentResponse(agent="dev", response=_read(result, "response"))
+    return AgentResponse(agent="dev", response=read_field(result, "response"))
 
 
 @router.post("/reviewer/run", response_model=AgentResponse)
@@ -43,8 +39,8 @@ def run_reviewer_agent(req: AgentRequest) -> AgentResponse:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     return AgentResponse(
         agent="reviewer",
-        response=_read(result, "response"),
-        metadata=reviewer_metadata(_read(result, "perspectives")),
+        response=read_field(result, "response"),
+        metadata=reviewer_metadata(read_field(result, "perspectives")),
     )
 
 
@@ -57,6 +53,6 @@ def run_team_agent(req: AgentRequest) -> AgentResponse:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     return AgentResponse(
         agent="team",
-        response=_read(result, "response"),
-        metadata={"routed_to": _read(result, "routed_to")},
+        response=read_field(result, "response"),
+        metadata={"routed_to": read_field(result, "routed_to")},
     )

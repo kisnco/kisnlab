@@ -17,8 +17,7 @@ pour faciliter les tests.
 from __future__ import annotations
 
 import logging
-import os
-from typing import Any, Callable
+from typing import Callable
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -26,8 +25,9 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 from app.agents.dev import build_dev_graph
+from app.agents.observability import LANGFUSE_CALLBACKS
 from app.agents.reviewer import build_reviewer_graph
-from app.agents.state import AgentName, DevState, ReviewerState, TeamState
+from app.agents.state import AgentName, DevState, ReviewerState, TeamState, read_field
 
 logger = logging.getLogger(__name__)
 
@@ -54,26 +54,6 @@ class _Route(BaseModel):
     agent: AgentName = Field(..., description="Sous-agent qui doit traiter la tâche.")
 
 
-def _build_langfuse_callbacks() -> list[Any]:
-    if not (os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY")):
-        return []
-    try:
-        from langfuse.langchain import CallbackHandler
-
-        return [CallbackHandler()]
-    except Exception as exc:
-        logger.warning("Langfuse tracing disabled (callback unavailable): %s", exc)
-        return []
-
-
-_LANGFUSE_CALLBACKS: list[Any] = _build_langfuse_callbacks()
-
-
-def _read(result: Any, field: str) -> Any:
-    """LangGraph state may be a dict or the BaseModel; normalize."""
-    return result[field] if isinstance(result, dict) else getattr(result, field)
-
-
 def route(state: TeamState) -> dict:
     """Demande à Claude Haiku quel sous-agent doit traiter la tâche."""
     llm = ChatAnthropic(model=MODEL, max_tokens=64).with_structured_output(_Route)
@@ -84,7 +64,7 @@ def route(state: TeamState) -> dict:
                 HumanMessage(content=f"Tâche : {state.task}"),
             ],
             config={
-                "callbacks": _LANGFUSE_CALLBACKS,
+                "callbacks": LANGFUSE_CALLBACKS,
                 "run_name": "team_router",
             },
         )
@@ -96,11 +76,15 @@ def route(state: TeamState) -> dict:
 
 def _make_delegate(dev_graph, reviewer_graph) -> Callable[[TeamState], dict]:
     def delegate(state: TeamState) -> dict:
+        # Propage routed_to dans la metadata du sub-graph → visible côté Langfuse
+        # sur la trace `dev_agent` / `reviewer_<perspective>` (utile pour debug
+        # quand on filtre les traces "qui sont passées par le team router").
+        sub_config = {"metadata": {"routed_to": state.routed_to, "routed_from": "team"}}
         if state.routed_to == "reviewer":
-            sub = reviewer_graph.invoke(ReviewerState(task=state.task))
+            sub = reviewer_graph.invoke(ReviewerState(task=state.task), config=sub_config)
         else:
-            sub = dev_graph.invoke(DevState(task=state.task))
-        return {"response": _read(sub, "response")}
+            sub = dev_graph.invoke(DevState(task=state.task), config=sub_config)
+        return {"response": read_field(sub, "response")}
 
     return delegate
 

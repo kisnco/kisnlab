@@ -6,7 +6,24 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ---
 
-## 2026-05-09
+## 2026-05-16
+
+### Polissage post-test live dev team (mention split + format reviewer + comportement Dev stateless)
+
+Première session de tests live Discord de l'équipe dev (Dev + Reviewer + Team). Trois bugs UX/archi observés et fixés sur la branche `feat/dev-team-discord-bot` :
+
+- **Bug 1 — Kael répondait aux mentions `@Dev`** : config OpenClaw `requireMention: false` faisait répondre Kael à tout message du channel allowlisté. Passé à `true` via `docker exec kisnlab-openclaw openclaw config set channels.discord.guilds.<id>.requireMention true`. Kael ne répond plus que sur `@Kael`. (Note : `openclaw.json` est gitignored, changement à reproduire si stack reconstruite from scratch.)
+- **Bug 2 — Reviewer produisait un mur de texte** : les 3 skills `security_review.md`/`quality_review.md`/`architecture_review.md` n'imposaient aucune contrainte de format. Ajout d'une section « Format de sortie (obligatoire) » : `findings` = liste markdown, max 3 puces ≤ 140 chars, pas de citation littérale du diff. Sortie review passe de ~80 lignes prose à ~15 lignes structurées (3 sections × ≤3 puces).
+- **Bug 3 — Dev forçait le workflow PR sur questions générales** : sans référence PR explicite, Dev demandait quand même « quel repo ? » et proposait de lister les PRs. Ajout dans `dev_base.md` d'une section « Mode de fonctionnement » qui rend explicites les contraintes stateless (pas de mémoire entre messages, pas d'accès FS) et la matrice de réponse selon le type de demande (question conceptuelle / analyse PR / ambigu). Gating « quand utiliser ces outils » ajouté en tête de `github_pr_tools.md`.
+
+Refactor lié (post-review du reviewer sur PR #10) :
+
+- **`services/api/app/agents/observability.py`** : nouveau module — factorisation de `_build_langfuse_callbacks` (auparavant dupliqué dans `dev.py`/`reviewer.py`/`team.py`). Singleton `LANGFUSE_CALLBACKS` construit une seule fois à l'import.
+- **`services/api/app/agents/state.py`** : nouvelle fonction `read_field(result, field)` — était dupliquée dans `team.py` et `routers/agents.py` (signalée par le reviewer comme abstraction transversale à centraliser).
+- **`services/api/app/agents/team.py`** : propagation `metadata={"routed_to": ..., "routed_from": "team"}` dans le `config` des invocations sub-graph → visible sur les traces Langfuse `dev_agent` / `reviewer_<perspective>` (debug : filtrer les runs passés par le team router).
+- **Tests `tests/test_skills_loader.py`** : assertions ajustées sur invariants stables (`KisnLab`, `gh_pr_diff`, `français`) après réécriture des skills.
+
+Tests : 72 verts + 7 skipped (intégration). Mémoire conversationnelle (LangGraph `MemorySaver` + `thread_id = channel_id`) délibérément différée à la **Phase 2** — workaround actuel : skills explicites sur le mode stateless. Décision tracée dans la mémoire Claude (`project_phase2_agent_memory.md`).
 
 ### Architecture — Bot Discord dédié à la dev team (séparation Kael ↔ Dev Team)
 

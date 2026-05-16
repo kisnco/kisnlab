@@ -12,9 +12,14 @@ Two layers:
 from __future__ import annotations
 
 import operator
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
 from pydantic import BaseModel, Field
+
+
+def read_field(result: Any, field: str) -> Any:
+    """LangGraph state may be a dict or the BaseModel; normalize."""
+    return result[field] if isinstance(result, dict) else getattr(result, field)
 
 # === API boundary ===
 

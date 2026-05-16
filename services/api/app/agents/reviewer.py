@@ -12,14 +12,17 @@ Le diff est récupéré une seule fois dans ``prepare`` puis injecté en bloc
 ``cache_control: ephemeral`` dans le system message des 3 perspectives.
 Anthropic met le diff en cache au premier appel et le réutilise sur les
 deux suivants (~½ coût vs 3 appels indépendants).
+
+Routing modèles :
+- security    → Sonnet  (raisonnement fin sur les vulnérabilités)
+- quality     → Haiku   (analyse mécanique, coût faible)
+- architecture → Sonnet (compréhension contextuelle nécessaire)
 """
 
 from __future__ import annotations
 
 import logging
-import os
 import re
-from typing import Any
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -27,6 +30,7 @@ from langgraph.constants import Send
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
+from app.agents.observability import LANGFUSE_CALLBACKS
 from app.agents.skills import load_skills
 from app.agents.state import (
     Perspective,
@@ -38,13 +42,18 @@ from app.agents.tools.github_tools import gh_pr_diff
 
 logger = logging.getLogger(__name__)
 
-MODEL = "claude-haiku-4-5-20251001"
-
 PERSPECTIVES: tuple[Perspective, ...] = ("security", "quality", "architecture")
+
 PERSPECTIVE_SKILLS: dict[Perspective, str] = {
     "security": "security_review",
     "quality": "quality_review",
     "architecture": "architecture_review",
+}
+
+PERSPECTIVE_MODELS: dict[Perspective, str] = {
+    "security": "claude-sonnet-4-6",
+    "quality": "claude-haiku-4-5-20251001",
+    "architecture": "claude-sonnet-4-6",
 }
 
 REVIEWER_SYSTEM_PREFIX = (
@@ -83,25 +92,7 @@ def _parse_pr_ref(task: str) -> tuple[str, int]:
     )
 
 
-# === Langfuse callbacks (same defensive pattern as dev.py) ===
-
-
-def _build_langfuse_callbacks() -> list[Any]:
-    if not (os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY")):
-        return []
-    try:
-        from langfuse.langchain import CallbackHandler
-
-        return [CallbackHandler()]
-    except Exception as exc:
-        logger.warning("Langfuse tracing disabled (callback unavailable): %s", exc)
-        return []
-
-
-_LANGFUSE_CALLBACKS: list[Any] = _build_langfuse_callbacks()
-
-
-# === Structured output schema (internal, sans le champ `perspective`) ===
+# === Structured output schema ===
 
 
 class _Assessment(BaseModel):
@@ -130,6 +121,7 @@ def _assess(perspective: Perspective, diff: str, task: str) -> PerspectiveOpinio
     """One perspective call. Diff is sent with ``cache_control: ephemeral``
     so the second and third calls hit the cache."""
     role_skill = load_skills([PERSPECTIVE_SKILLS[perspective]])
+    model = PERSPECTIVE_MODELS[perspective]
 
     system_blocks = [
         {"type": "text", "text": REVIEWER_SYSTEM_PREFIX},
@@ -148,12 +140,12 @@ def _assess(perspective: Perspective, diff: str, task: str) -> PerspectiveOpinio
         )
     )
 
-    llm = ChatAnthropic(model=MODEL, max_tokens=1024).with_structured_output(_Assessment)
+    llm = ChatAnthropic(model=model, max_tokens=1024).with_structured_output(_Assessment)
     try:
         result: _Assessment = llm.invoke(
             [system, human],
             config={
-                "callbacks": _LANGFUSE_CALLBACKS,
+                "callbacks": LANGFUSE_CALLBACKS,
                 "run_name": f"reviewer_{perspective}",
             },
         )
