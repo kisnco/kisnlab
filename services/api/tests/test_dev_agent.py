@@ -52,6 +52,59 @@ def test_dev_agent_flattens_block_content():
         assert response == "bloc1 bloc2"
 
 
+def test_dev_agent_uses_conversation_history():
+    """Quand DevState porte un historique, l'agent ReAct le reçoit en entier
+    (après le SystemMessage) — c'est le mécanisme de mémoire Phase 2."""
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    from app.agents.dev import build_dev_graph
+    from app.agents.state import DevState
+
+    with patch("app.agents.dev.create_react_agent") as mock_react, \
+         patch("app.agents.dev.ChatAnthropic"):
+        fake_message = MagicMock()
+        fake_message.content = "réponse contextuelle"
+        mock_agent = MagicMock()
+        mock_agent.invoke.return_value = {"messages": [fake_message]}
+        mock_react.return_value = mock_agent
+
+        history = [
+            HumanMessage(content="comment marche team.py ?"),
+            AIMessage(content="c'est un supervisor LangGraph"),
+            HumanMessage(content="et le repo ?"),
+        ]
+        build_dev_graph().invoke(DevState(task="et le repo ?", messages=history))
+
+        sent = mock_agent.invoke.call_args.args[0]["messages"]
+        # SystemMessage en tête, puis les 3 messages d'historique tels quels.
+        assert [m.content for m in sent[1:]] == [
+            "comment marche team.py ?",
+            "c'est un supervisor LangGraph",
+            "et le repo ?",
+        ]
+
+
+def test_dev_agent_falls_back_to_task_when_no_history():
+    """Sans historique (one-shot /agents/dev/run), l'agent reçoit un unique
+    HumanMessage construit depuis ``task``."""
+    from app.agents.dev import build_dev_graph
+    from app.agents.state import DevState
+
+    with patch("app.agents.dev.create_react_agent") as mock_react, \
+         patch("app.agents.dev.ChatAnthropic"):
+        fake_message = MagicMock()
+        fake_message.content = "ok"
+        mock_agent = MagicMock()
+        mock_agent.invoke.return_value = {"messages": [fake_message]}
+        mock_react.return_value = mock_agent
+
+        build_dev_graph().invoke(DevState(task="question isolée"))
+
+        sent = mock_agent.invoke.call_args.args[0]["messages"]
+        assert len(sent) == 2  # SystemMessage + HumanMessage
+        assert sent[1].content == "question isolée"
+
+
 def test_run_dev_agent_endpoint_with_mock():
     """POST /agents/dev/run renvoie l'enveloppe AgentResponse (graphe mocké)."""
     with patch("app.routers.agents.dev_graph") as mock_graph:

@@ -43,6 +43,7 @@ Chaque endpoint `/agents/*/run` consomme `AgentRequest` et renvoie `AgentRespons
 ```python
 class AgentRequest(BaseModel):
     task: str  # 1..8000 chars
+    thread_id: str | None = None  # Phase 2 — clé de conversation (cf. mémoire)
 
 class AgentResponse(BaseModel):
     agent: Literal["dev", "reviewer", "team"]
@@ -51,6 +52,8 @@ class AgentResponse(BaseModel):
 ```
 
 Chaque graphe LangGraph utilise un state Pydantic dédié : `DevState`, `ReviewerState` (+ `PerspectiveOpinion`), `TeamState`. `StateGraph(BaseModel)` est supporté par LangGraph 0.2.60 ; les nodes peuvent retourner soit l'objet entier soit un partial dict.
+
+`DevState` et `TeamState` portent un champ `messages: Annotated[list[AnyMessage], add_messages]` — l'historique de conversation (Phase 2, cf. section dédiée).
 
 ---
 
@@ -70,7 +73,7 @@ Singleton `LANGFUSE_CALLBACKS` construit une seule fois à l'import du module �
 START → call_claude → END
 ```
 
-État : `DevState` (Pydantic — `task`, `response`).
+État : `DevState` (Pydantic — `task`, `messages`, `response`).
 
 Système prompt composé via `load_skills(("dev_base", "github_pr_tools"))`.
 
@@ -128,7 +131,7 @@ Formats de PR ref acceptés : URL GitHub, `owner/repo#N`, narratif `#N (in|of|de
 START → route → delegate → END
 ```
 
-État : `TeamState` (Pydantic — `task`, `routed_to: Optional[AgentName]`, `response`).
+État : `TeamState` (Pydantic — `task`, `messages`, `routed_to: Optional[AgentName]`, `response`).
 
 - **`route`** : Claude Haiku avec `with_structured_output(_Route)` (where `_Route(agent: Literal["dev", "reviewer"])`). Décision déterministe, fallback `dev` si l'appel LLM plante.
 - **`delegate`** : invoque le sub-graph ciblé (`dev_graph` ou `reviewer_graph`) avec son state propre (`DevState` / `ReviewerState`). Les sub-graphs sont injectables dans `build_team_graph(dev_graph=..., reviewer_graph=...)` — le router HTTP réutilise les singletons existants pour éviter une double compilation.
@@ -149,6 +152,26 @@ POST /agents/team/run
 ```
 
 `ValueError` du sub-graph (typiquement reviewer sur une PR ref invalide) → `422`.
+
+---
+
+## Phase 2 — Mémoire conversationnelle
+
+Avant la Phase 2, les agents étaient **stateless** : chaque message Discord était traité isolément, l'agent oubliait tout entre deux tours.
+
+### Mécanisme
+
+- Le graphe `team` est compilé `with checkpointer=MemorySaver()` (in-memory). L'historique est persisté **par `thread_id`** tant que le process `kisnlab-api` tourne — vidé à chaque redémarrage. Passage à `PostgresSaver` (persistant) prévu en PR ultérieure.
+- `thread_id = f"discord:{channel_id}"` — un fil de conversation par channel Discord. Le `dev-bot` le transmet dans le body de `POST /agents/team/run` ; le router le pose dans `config={"configurable": {"thread_id": ...}}`.
+- Sans `thread_id` dans la requête, le router génère une clé `ephemeral:<uuid>` → appel one-shot, aucun historique (rétrocompatible).
+- `TeamState.messages` et `DevState.messages` utilisent le reducer `add_messages` : le tour courant est fusionné avec ce que le checkpointer a restauré.
+- Le node `delegate` transmet `state.messages` (historique complet) au sous-graphe `dev`, puis enregistre la réponse via `{"messages": [AIMessage(response)]}`.
+
+### Périmètre
+
+- **`dev`** : reçoit l'historique → conversation multi-tours (clarifications, itérations, contexte cumulé).
+- **`reviewer`** : reste **one-shot** — il opère sur une référence de PR, pas sur un fil de discussion. Pas d'historique transmis.
+- **`build_team_graph(checkpointer=None)`** : sans checkpointer → graphe stateless (Phase 1, utilisé par les tests de routing).
 
 ---
 
@@ -212,6 +235,6 @@ L'agent `dev` est en **lecture seule** sur GitHub (`gh_pr_list`, `gh_pr_get`, `g
 - [x] Phase B — Agent `dev` (1 node, Haiku, sans tracing)
 - [x] Phase C — Tracing Langfuse via `CallbackHandler` (run_name=`dev_agent`)
 - [x] Phase 1 — Équipe Dev + Reviewer (PR-1 → PR-4 ✅)
-- [ ] Phase 2 — Dev avec tools d'écriture (Codex)
+- [x] Phase 2 — Mémoire conversationnelle (`MemorySaver` + `thread_id = channel Discord`)
 - [ ] Phase F — `commercial` / `admin` / `comm` + pattern draft Discord
-- [ ] Plus tard — checkpoints Postgres pour reprises longues
+- [ ] Plus tard — `PostgresSaver` (mémoire persistante), Dev avec tools d'écriture (Codex)

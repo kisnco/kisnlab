@@ -103,12 +103,16 @@ async def on_message(message: discord.Message) -> None:
 
     logger.info("task from %s (channel=%s): %s", message.author, message.channel, task[:120])
 
+    # thread_id = channel Discord → mémoire conversationnelle côté API (Phase 2).
+    # Chaque channel garde son fil ; les agents se souviennent des tours passés.
+    thread_id = f"discord:{message.channel.id}"
+
     async with message.channel.typing():
         try:
             async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as http:
                 resp = await http.post(
                     f"{API_URL}/agents/team/run",
-                    json={"task": task},
+                    json={"task": task, "thread_id": thread_id},
                     headers={"Authorization": f"Bearer {API_TOKEN}"},
                 )
                 resp.raise_for_status()
