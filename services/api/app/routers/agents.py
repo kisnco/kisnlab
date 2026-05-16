@@ -1,4 +1,8 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.memory import MemorySaver
 
 from app.agents.dev import build_dev_graph
 from app.agents.reviewer import build_reviewer_graph, reviewer_metadata
@@ -21,7 +25,14 @@ router = APIRouter(
 
 dev_graph = build_dev_graph()
 reviewer_graph = build_reviewer_graph()
-team_graph = build_team_graph(dev_graph=dev_graph, reviewer_graph=reviewer_graph)
+# MemorySaver : mémoire conversationnelle in-memory (Phase 2). Persiste
+# l'historique par thread_id tant que le process kisnlab-api tourne ;
+# vidée à chaque redémarrage. Passage à PostgresSaver = PR ultérieure.
+team_graph = build_team_graph(
+    dev_graph=dev_graph,
+    reviewer_graph=reviewer_graph,
+    checkpointer=MemorySaver(),
+)
 
 
 @router.post("/dev/run", response_model=AgentResponse)
@@ -46,8 +57,13 @@ def run_reviewer_agent(req: AgentRequest) -> AgentResponse:
 
 @router.post("/team/run", response_model=AgentResponse)
 def run_team_agent(req: AgentRequest) -> AgentResponse:
+    # thread_id absent → uuid éphémère : chaque appel est isolé, donc one-shot
+    # (le checkpointer n'a aucun historique antérieur sous cette clé).
+    thread_id = req.thread_id or f"ephemeral:{uuid.uuid4()}"
+    config = {"configurable": {"thread_id": thread_id}}
+    initial = TeamState(task=req.task, messages=[HumanMessage(content=req.task)])
     try:
-        result = team_graph.invoke(TeamState(task=req.task))
+        result = team_graph.invoke(initial, config=config)
     except ValueError as exc:
         # Sub-graph parse error (e.g. reviewer PR ref) → 422.
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))

@@ -26,6 +26,13 @@ class TestAgentRequest:
         with pytest.raises(ValidationError):
             AgentRequest(task="x" * 8001)
 
+    def test_thread_id_optional_defaults_none(self):
+        assert AgentRequest(task="hello").thread_id is None
+
+    def test_accepts_thread_id(self):
+        req = AgentRequest(task="hello", thread_id="discord:42")
+        assert req.thread_id == "discord:42"
+
 
 class TestAgentResponse:
     def test_default_metadata_is_empty(self):
@@ -45,6 +52,12 @@ class TestInternalStates:
     def test_dev_state_default_response(self):
         s = DevState(task="t")
         assert s.response == ""
+
+    def test_dev_state_messages_default_empty(self):
+        assert DevState(task="t").messages == []
+
+    def test_team_state_messages_default_empty(self):
+        assert TeamState(task="t").messages == []
 
     def test_reviewer_state_starts_empty(self):
         s = ReviewerState(task="t")

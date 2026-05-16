@@ -16,6 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.memory import MemorySaver
 
 from app.agents.state import TeamState
 from app.agents.team import ROUTER_SYSTEM, _Route, build_team_graph
@@ -132,6 +134,94 @@ class TestRouting:
                 graph.invoke(TeamState(task="review please"))
 
 
+# === Conversation memory (Phase 2) ===
+
+
+def _capturing_dev_graph(seen: list):
+    """Stub dev sub-graph qui enregistre les messages reçus à chaque appel."""
+    def dev_invoke(state, config=None):
+        seen.append([m.content for m in state.messages])
+        return {"response": f"réponse {len(seen)}"}
+
+    g = MagicMock()
+    g.invoke.side_effect = dev_invoke
+    return g
+
+
+class TestConversationMemory:
+    def test_history_accumulates_across_turns_same_thread(self):
+        """Sur un même thread_id, le sous-agent dev voit l'historique cumulé :
+        questions ET réponses des tours précédents."""
+        seen: list = []
+        dev_g = _capturing_dev_graph(seen)
+        rev_g = _stub_subgraph(perspectives=[])
+
+        with patch("app.agents.team.ChatAnthropic") as mock_anth:
+            llm, _ = _mock_router_returning("dev")
+            mock_anth.return_value = llm
+
+            graph = build_team_graph(
+                dev_graph=dev_g, reviewer_graph=rev_g, checkpointer=MemorySaver()
+            )
+            config = {"configurable": {"thread_id": "chan-1"}}
+            for turn in ("première question", "deuxième question", "troisième question"):
+                graph.invoke(
+                    TeamState(task=turn, messages=[HumanMessage(content=turn)]),
+                    config=config,
+                )
+
+        # Tour 1 : dev ne voit que sa propre question.
+        assert seen[0] == ["première question"]
+        # Tour 3 : dev voit les 3 questions + les 2 réponses précédentes.
+        assert "première question" in seen[2]
+        assert "deuxième question" in seen[2]
+        assert "troisième question" in seen[2]
+        assert "réponse 1" in seen[2]
+        assert "réponse 2" in seen[2]
+
+    def test_distinct_threads_do_not_share_history(self):
+        """Deux thread_id différents (= deux channels Discord) sont isolés."""
+        seen: list = []
+        dev_g = _capturing_dev_graph(seen)
+        rev_g = _stub_subgraph(perspectives=[])
+
+        with patch("app.agents.team.ChatAnthropic") as mock_anth:
+            llm, _ = _mock_router_returning("dev")
+            mock_anth.return_value = llm
+
+            graph = build_team_graph(
+                dev_graph=dev_g, reviewer_graph=rev_g, checkpointer=MemorySaver()
+            )
+            graph.invoke(
+                TeamState(task="sujet A", messages=[HumanMessage(content="sujet A")]),
+                config={"configurable": {"thread_id": "chan-A"}},
+            )
+            graph.invoke(
+                TeamState(task="sujet B", messages=[HumanMessage(content="sujet B")]),
+                config={"configurable": {"thread_id": "chan-B"}},
+            )
+
+        assert seen[0] == ["sujet A"]
+        assert seen[1] == ["sujet B"]  # pas de fuite du thread A
+
+    def test_stateless_when_no_checkpointer(self):
+        """Sans checkpointer (Phase 1), chaque invoke repart de zéro."""
+        seen: list = []
+        dev_g = _capturing_dev_graph(seen)
+        rev_g = _stub_subgraph(perspectives=[])
+
+        with patch("app.agents.team.ChatAnthropic") as mock_anth:
+            llm, _ = _mock_router_returning("dev")
+            mock_anth.return_value = llm
+
+            graph = build_team_graph(dev_graph=dev_g, reviewer_graph=rev_g)
+            graph.invoke(TeamState(task="q1", messages=[HumanMessage(content="q1")]))
+            graph.invoke(TeamState(task="q2", messages=[HumanMessage(content="q2")]))
+
+        assert seen[0] == ["q1"]
+        assert seen[1] == ["q2"]  # aucun cumul
+
+
 # === Endpoint ===
 
 
@@ -160,6 +250,29 @@ class TestTeamEndpoint:
     def test_team_endpoint_validates_empty_task(self):
         res = client.post("/agents/team/run", json={"task": ""})
         assert res.status_code == 422
+
+    def test_team_endpoint_forwards_thread_id_to_config(self):
+        """Le thread_id de la requête arrive bien dans le config LangGraph."""
+        with patch("app.routers.agents.team_graph") as mock_graph:
+            mock_graph.invoke.return_value = {
+                "task": "t", "routed_to": "dev", "response": "r",
+            }
+            client.post(
+                "/agents/team/run",
+                json={"task": "salut", "thread_id": "discord:42"},
+            )
+            config = mock_graph.invoke.call_args.kwargs["config"]
+            assert config["configurable"]["thread_id"] == "discord:42"
+
+    def test_team_endpoint_uses_ephemeral_thread_when_absent(self):
+        """Sans thread_id, le router génère une clé éphémère → appel one-shot."""
+        with patch("app.routers.agents.team_graph") as mock_graph:
+            mock_graph.invoke.return_value = {
+                "task": "t", "routed_to": "dev", "response": "r",
+            }
+            client.post("/agents/team/run", json={"task": "salut"})
+            config = mock_graph.invoke.call_args.kwargs["config"]
+            assert config["configurable"]["thread_id"].startswith("ephemeral:")
 
 
 # === Real LLM routing (skipped without API key) ===

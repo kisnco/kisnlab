@@ -8,6 +8,21 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-16
 
+### Phase 2 — Mémoire conversationnelle des agents (LangGraph checkpointer)
+
+Branche `feat/agent-memory-langgraph`. Fix du bug observé en test live : Dev oubliait tout entre deux tours d'une même conversation Discord.
+
+- **`state.py`** : `TeamState` et `DevState` portent un champ `messages: Annotated[list[AnyMessage], add_messages]` (historique de conversation). `AgentRequest` accepte `thread_id: Optional[str]`.
+- **`team.py`** : `build_team_graph(checkpointer=None)` — si fourni, le graphe persiste l'historique par `thread_id`. Le node `delegate` transmet `state.messages` au sous-graphe `dev` et enregistre la réponse via `add_messages`.
+- **`dev.py`** : `call_claude` envoie tout l'historique à l'agent ReAct (fallback `HumanMessage(task)` si pas d'historique → one-shot `/agents/dev/run` inchangé).
+- **`routers/agents.py`** : `team_graph` compilé avec `MemorySaver()` (in-memory). `/agents/team/run` mappe `thread_id` → `config.configurable.thread_id` ; absent → clé `ephemeral:<uuid>` (appel isolé, rétrocompatible).
+- **`dev-bot/main.py`** : envoie `thread_id = f"discord:{channel_id}"` — un fil de mémoire par channel.
+- **`dev_base.md`** : retrait du workaround « tu es stateless » de la Phase 1 — Dev sait désormais qu'il a une mémoire conversationnelle et tient compte de l'historique.
+
+Périmètre : **Reviewer reste one-shot** (opère sur une référence de PR, pas un fil). Mémoire **in-memory** — vidée au redémarrage de `kisnlab-api` ; passage à `PostgresSaver` (persistant) prévu en PR ultérieure.
+
+Tests : 90 verts (+11 — conversation 3 tours avec contexte cumulé, isolation entre threads, fallback stateless). Spec `LANGGRAPH.md` § Phase 2 mise à jour.
+
 ### Polissage post-test live dev team (mention split + format reviewer + comportement Dev stateless)
 
 Première session de tests live Discord de l'équipe dev (Dev + Reviewer + Team). Trois bugs UX/archi observés et fixés sur la branche `feat/dev-team-discord-bot` :

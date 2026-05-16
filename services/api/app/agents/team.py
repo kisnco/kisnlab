@@ -20,7 +20,7 @@ import logging
 from typing import Callable
 
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
@@ -81,15 +81,30 @@ def _make_delegate(dev_graph, reviewer_graph) -> Callable[[TeamState], dict]:
         # quand on filtre les traces "qui sont passées par le team router").
         sub_config = {"metadata": {"routed_to": state.routed_to, "routed_from": "team"}}
         if state.routed_to == "reviewer":
+            # Reviewer reste one-shot : il opère sur une référence de PR, pas
+            # sur un fil de discussion — pas d'historique transmis.
             sub = reviewer_graph.invoke(ReviewerState(task=state.task), config=sub_config)
         else:
-            sub = dev_graph.invoke(DevState(task=state.task), config=sub_config)
-        return {"response": read_field(sub, "response")}
+            # Dev reçoit tout l'historique du thread (Phase 2 — mémoire
+            # conversationnelle) pour répondre en tenant compte des tours passés.
+            sub = dev_graph.invoke(
+                DevState(task=state.task, messages=state.messages), config=sub_config
+            )
+        response = read_field(sub, "response")
+        # On enregistre la réponse dans l'historique du thread : le reducer
+        # add_messages l'append, le checkpointer la persiste pour le tour suivant.
+        return {"response": response, "messages": [AIMessage(content=response)]}
 
     return delegate
 
 
-def build_team_graph(dev_graph=None, reviewer_graph=None):
+def build_team_graph(dev_graph=None, reviewer_graph=None, checkpointer=None):
+    """Compile le graphe team.
+
+    ``checkpointer`` (Phase 2) : si fourni, le graphe persiste l'historique par
+    ``thread_id`` → mémoire conversationnelle. Si ``None``, graphe stateless
+    (comportement Phase 1, utilisé par les tests de routing).
+    """
     dev_graph = dev_graph if dev_graph is not None else build_dev_graph()
     reviewer_graph = reviewer_graph if reviewer_graph is not None else build_reviewer_graph()
 
@@ -99,4 +114,4 @@ def build_team_graph(dev_graph=None, reviewer_graph=None):
     graph.add_edge(START, "route")
     graph.add_edge("route", "delegate")
     graph.add_edge("delegate", END)
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer) if checkpointer else graph.compile()

@@ -14,6 +14,8 @@ from __future__ import annotations
 import operator
 from typing import Annotated, Any, Literal, Optional
 
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
 
@@ -28,9 +30,15 @@ ResponderName = Literal["dev", "reviewer", "team"]
 
 
 class AgentRequest(BaseModel):
-    """Single shape for every ``/agents/*/run`` endpoint."""
+    """Single shape for every ``/agents/*/run`` endpoint.
+
+    ``thread_id`` is the conversation key (Phase 2). When set, the team graph
+    loads/saves history under it via the LangGraph checkpointer; when absent,
+    the call is treated as one-shot (no memory).
+    """
 
     task: str = Field(..., min_length=1, max_length=8000)
+    thread_id: Optional[str] = None
 
 
 class AgentResponse(BaseModel):
@@ -50,6 +58,9 @@ class AgentResponse(BaseModel):
 
 class DevState(BaseModel):
     task: str
+    # Conversation history (Phase 2). Empty for a one-shot ``/agents/dev/run``;
+    # populated by the team supervisor when it delegates a multi-turn thread.
+    messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
     response: str = ""
 
 
@@ -75,5 +86,8 @@ class ReviewerState(BaseModel):
 
 class TeamState(BaseModel):
     task: str
+    # Conversation history (Phase 2). The ``add_messages`` reducer merges the
+    # current turn with whatever the checkpointer restored for this thread.
+    messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
     routed_to: Optional[AgentName] = None
     response: str = ""
