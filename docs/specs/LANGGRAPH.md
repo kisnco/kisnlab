@@ -13,20 +13,13 @@ LangGraph est l'orchestrateur multi-agents métier de KisnLab. Il vit dans le se
 ## Pattern de routing
 
 ```
-Discord → OpenClaw (skills delegate-to-*) → kisnlab-api → graphe LangGraph → Claude → réponse
+Discord (@Dev) → kisnlab-dev-bot → kisnlab-api (/agents/team/run)
+       → team supervisor (route LLM Haiku) → dev | reviewer → Claude → réponse
 ```
 
-OpenClaw reste le point d'entrée Discord. Il délègue à FastAPI les tâches métier qui demandent un raisonnement structuré ou plusieurs étapes coordonnées.
+L'équipe dev a sa propre identité Discord, distincte de Kael (OpenClaw). Le service `kisnlab-dev-bot` (cf. `services/dev-bot/`) écoute uniquement les mentions du bot Dev Team, transmet chaque message à `POST /agents/team/run`, et poste la réponse en thread dans le channel d'origine. Préfixe `[dev]` ou `[reviewer]` selon le routage du superviseur.
 
-3 skills "passeur de plat" côté OpenClaw, un par endpoint :
-
-| Skill | Trigger | Endpoint |
-|-------|---------|----------|
-| `delegate-to-api` | "agent dev : [...]" | `POST /agents/dev/run` |
-| `delegate-to-reviewer` | `/review <PR>` | `POST /agents/reviewer/run` |
-| `delegate-to-team` | `/team <msg>` | `POST /agents/team/run` |
-
-Voir `SKILLS.md` pour les conventions de skills.
+Kael (OpenClaw) ne route plus rien vers FastAPI — séparation nette entre les 2 entités. Cf. `DISCORD.md`.
 
 ---
 
@@ -64,6 +57,10 @@ Chaque graphe LangGraph utilise un state Pydantic dédié : `DevState`, `Reviewe
 ## Skills (`app/agents/skills/`)
 
 Fragments markdown injectés dans les system prompts. API : `load_skills(["dev_base", "github_pr_tools"]) -> str` (concaténation avec séparateur `---`, fail-fast si fragment manquant). Permet de partager la base d'identité entre sous-agents et de versionner les fragments indépendamment du code Python.
+
+## Observabilité (`app/agents/observability.py`)
+
+Singleton `LANGFUSE_CALLBACKS` construit une seule fois à l'import du module — partagé entre `dev`, `reviewer` et `team`. Si `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` manquent ou si l'import `langfuse.langchain` échoue, on retourne `[]` (dégradation gracieuse, agents restent opérationnels sans tracing). Le team supervisor propage `metadata={"routed_to": ..., "routed_from": "team"}` dans le `config` des sub-graphs — visible côté trace Langfuse pour filtrer les runs passés par le router.
 
 ---
 
@@ -188,7 +185,7 @@ Pour les agents qui touchent à l'extérieur (`commercial`, `admin`, `comm`) :
 - Publication dans `#admin` ou `#alertes` Discord pour validation
 - Exécution réelle = action manuelle ou workflow n8n explicitement déclenché
 
-L'agent `dev` est exempt de cette règle (sortie textuelle, pas d'action externe directe).
+L'agent `dev` est en **lecture seule** sur GitHub (`gh_pr_list`, `gh_pr_get`, `gh_pr_diff`). Les outils d'écriture (`gh_pr_review`, `gh_pr_comment`) sont définis mais **non exposés** à l'agent — ils restent accessibles à un futur skill avec validation explicite. Cf. `services/api/app/agents/tools/github_tools.py` (constante `GITHUB_PR_WRITE_TOOLS`).
 
 ---
 

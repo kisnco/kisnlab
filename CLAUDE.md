@@ -43,6 +43,7 @@ Stack IA auto-hébergée pour piloter KIS'n Code depuis Discord.
 | ClickHouse | clickhouse/clickhouse-server:24.12 | port 8123 (interne) |
 | Langfuse v3 | langfuse/langfuse:3 | http://langfuse.kisnlab.local |
 | KisnLab API | python:3.12-slim (build local) | http://api.kisnlab.local |
+| KisnLab Dev Bot | python:3.12-slim (build local) | bot Discord — pas d'endpoint HTTP |
 
 ### Faits importants sur OpenClaw
 

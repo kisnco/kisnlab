@@ -7,14 +7,13 @@ prompt is composed from markdown skill fragments via ``load_skills``.
 from __future__ import annotations
 
 import logging
-import os
-from typing import Any
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import create_react_agent
 
+from app.agents.observability import LANGFUSE_CALLBACKS
 from app.agents.skills import load_skills
 from app.agents.state import DevState
 from app.agents.tools.github_tools import GITHUB_PR_TOOLS
@@ -29,24 +28,6 @@ def _build_system_prompt() -> str:
     return load_skills(DEV_SKILLS)
 
 
-def _build_langfuse_callbacks() -> list[Any]:
-    """Return ``[CallbackHandler()]`` if Langfuse is reachable, else ``[]``.
-
-    Defensive: missing env vars OR import failure (lib absent / network error)
-    yields ``[]`` so the agent stays usable without observability.
-    """
-    if not (os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY")):
-        return []
-    try:
-        from langfuse.langchain import CallbackHandler
-
-        return [CallbackHandler()]
-    except Exception as exc:
-        logger.warning("Langfuse tracing disabled (callback unavailable): %s", exc)
-        return []
-
-
-_LANGFUSE_CALLBACKS: list[Any] = _build_langfuse_callbacks()
 _SYSTEM_PROMPT: str = _build_system_prompt()
 
 
@@ -60,7 +41,7 @@ def call_claude(state: DevState) -> DevState:
                 ("user", state.task),
             ]
         },
-        config={"callbacks": _LANGFUSE_CALLBACKS, "run_name": "dev_agent"},
+        config={"callbacks": LANGFUSE_CALLBACKS, "run_name": "dev_agent"},
     )
     final_message = result["messages"][-1]
     content = final_message.content

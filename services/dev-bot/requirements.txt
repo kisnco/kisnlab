@@ -1,0 +1,6 @@
+discord.py==2.4.0
+httpx==0.27.2
+pytest==8.3.3
+# Polyfill du module ``audioop`` retiré en Python 3.13 — discord.py l'importe.
+# Le container build utilise Python 3.12 et ignore cette ligne.
+audioop-lts==0.2.1; python_version >= "3.13"

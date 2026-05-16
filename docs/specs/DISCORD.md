@@ -7,7 +7,11 @@ _Source de vérité pour la configuration Discord de KisnLab._
 ## Serveur Discord
 
 - **Nom** : KisnLab (serveur privé, usage solo)
-- **Accès bot** : restreint à `DISCORD_YOUR_USER_ID` uniquement (`allowedUsers` dans `openclaw.json`)
+- **Accès** : 2 bots distincts, tous les deux restreints à `DISCORD_YOUR_USER_ID` :
+  - **`KisnLab Bot`** (display name **`Kael`** sur le serveur) — OpenClaw, skills généralistes (admin, commercial, comm, stratégie). Allowlist via `allowedUsers` dans `openclaw.json`.
+  - **`KisnLab Dev Team`** (display name **`Dev`** sur le serveur) — bot Python dédié (`services/dev-bot/`), forwarde chaque mention à `POST /agents/team/run`. Allowlist en dur dans `main.py` via `DISCORD_YOUR_USER_ID`.
+
+> Les *application names* (Discord Developer Portal) restent `KisnLab Bot` et `KisnLab Dev Team` — ce sont des identités stables. Le *display name* sur le serveur (`Kael`, `Dev`) est cosmétique et peut changer.
 
 ---
 
@@ -26,20 +30,25 @@ _Source de vérité pour la configuration Discord de KisnLab._
 
 ---
 
-## Bot Discord — Configuration
+## Bots Discord — Configuration
 
-### Création du bot
+### Bot 1 — KisnLab Bot (Kael, OpenClaw)
 
 1. [discord.com/developers/applications](https://discord.com/developers/applications)
 2. "New Application" → nom : **KisnLab Bot**
 3. Onglet "Bot" → "Add Bot" → copier le **Token** → `.env` `DISCORD_BOT_TOKEN`
 
-### Privileged Gateway Intents requis
+### Bot 2 — KisnLab Dev Team (service `kisnlab-dev-bot`)
+
+1. Même portail → "New Application" → nom : **KisnLab Dev Team**
+2. Onglet "Bot" → "Add Bot" → copier le **Token** → `.env` `DISCORD_DEV_BOT_TOKEN`
+
+### Privileged Gateway Intents requis (les 2 bots)
 
 - ✅ Server Members Intent
 - ✅ Message Content Intent
 
-### Permissions OAuth2
+### Permissions OAuth2 (les 2 bots)
 
 Scopes : `bot`
 Permissions minimales :
@@ -47,9 +56,9 @@ Permissions minimales :
 - Read Message History
 - View Channels
 
-### Invitation du bot
+### Invitation des bots
 
-Onglet OAuth2 → URL Generator → Scopes + Permissions → ouvrir l'URL → inviter dans le serveur KisnLab.
+Onglet OAuth2 → URL Generator → Scopes + Permissions → ouvrir l'URL → inviter dans le serveur KisnLab. À faire pour chacun des 2 bots.
 
 ---
 
@@ -76,12 +85,11 @@ Activer **Mode Développeur** : Paramètres utilisateur → Avancé → Mode dé
 
 | Channel | Exemple de message |
 |---------|-------------------|
-| `#dev` | `@bot review le fichier Auth.php` |
-| `#dev` | `@bot propose une archi pour [feature]` |
-| `#dev` | `@bot agent dev : explique ce que fait ce code [...]` (skill `delegate-to-api`) |
-| `#dev` | `@bot /review kisnco/kisnlab#42` (skill `delegate-to-reviewer`, retourne 3 perspectives) |
-| `#dev` | `@bot /team peux-tu m'aider sur X ?` (skill `delegate-to-team`, route auto vers dev ou reviewer) |
-| `#commercial` | `@bot fais un devis pour [brief client]` |
+| `#dev` | `@Dev explique ce que fait ce code [...]` → route auto vers `dev` |
+| `#dev` | `@Dev review la PR kisnco/kisnlab#42` → route auto vers `reviewer` (3 perspectives) |
+| `#dev` | `@Kael review le fichier Auth.php` (skill OpenClaw `dev-reviewer`, snippet collé) |
+| `#dev` | `@Kael propose une archi pour [feature]` (skill OpenClaw `dev-architect`) |
+| `#commercial` | `@Kael fais un devis pour [brief client]` |
 | `#admin` | `@bot génère la facture pour [client] [montant]` |
 | `#comm` | `@bot écris un post LinkedIn sur [sujet]` |
 | `#strategie` | `@bot dois-je accepter cette mission à [tarif] ?` |
@@ -93,6 +101,7 @@ Activer **Mode Développeur** : Paramètres utilisateur → Avancé → Mode dé
 
 ## Sécurité
 
-- Le bot ne répond qu'à `DISCORD_YOUR_USER_ID` (configuré dans `openclaw.json` → `allowedUsers`)
+- Les **deux bots** ne répondent qu'à `DISCORD_YOUR_USER_ID`. Pour Kael : `openclaw.json` → `allowedUsers`. Pour Dev Team : guard en dur dans `services/dev-bot/main.py`.
 - Les channels `#alertes`, `#briefs`, `#logs` sont en `readOnly: true` dans la config
-- Les actions sensibles (envoi email, git push, paiement, publication) nécessitent `approval: required`
+- Les actions sensibles (envoi email, git push, paiement, publication) nécessitent `approval: required` côté skill OpenClaw
+- L'agent `dev` est en **lecture seule** sur GitHub (`gh_pr_list` / `gh_pr_get` / `gh_pr_diff`). Aucun outil d'écriture exposé. Si publication souhaitée un jour : skill séparé avec validation explicite.

@@ -36,9 +36,6 @@ approval: required   # uniquement si action externe (envoi, publication...)
 | `comm-linkedin` | #comm | Haiku | ✅ Oui | ✅ Prêt |
 | `strategie-conseiller` | #strategie | Sonnet | ✅ Oui | ✅ Prêt |
 | `strategie-veille` | #strategie | Haiku | Non | ✅ Prêt |
-| `delegate-to-api` | #dev | Haiku | Non | ✅ Prêt |
-| `delegate-to-reviewer` | #dev | Haiku | Non | ✅ Prêt |
-| `delegate-to-team` | #dev | Haiku | Non | ✅ Prêt |
 
 ---
 
@@ -84,22 +81,16 @@ approval: required   # uniquement si action externe (envoi, publication...)
 
 ---
 
-## Pont Discord ↔ kisnlab-api (delegate-to-*)
+## Pont Discord ↔ kisnlab-api
 
-3 skills routent les tâches Discord vers FastAPI/LangGraph. Tous **passeurs de plat** — pas de raisonnement OpenClaw par-dessus.
+**N'est plus géré par OpenClaw/Kael.** L'équipe dev a sa propre identité Discord (bot **KisnLab Dev Team**, service `kisnlab-dev-bot`), qui transmet chaque mention à `POST /agents/team/run`. Le superviseur LangGraph route ensuite vers `dev` ou `reviewer`.
 
-| Skill | Endpoint API | Trigger Discord | Quand l'utiliser |
-|-------|--------------|-----------------|------------------|
-| `delegate-to-api` | `POST /agents/dev/run` | "agent dev : [...]" | Tâche dev claire — aucun surcoût de routage. |
-| `delegate-to-reviewer` | `POST /agents/reviewer/run` | `/review <PR>` | Review multi-perspectives sur une PR identifiée. |
-| `delegate-to-team` | `POST /agents/team/run` | `/team <msg>` | Pas sûre du sous-agent — laisse le superviseur Haiku décider (+1 call LLM ~0.001¢). |
+Conséquence : Mélodie parle à **deux entités distinctes** dans Discord :
 
-Format de réponse Discord standardisé :
-- `delegate-to-reviewer` affiche en tête le mapping `severities` (security/quality/architecture → block/warn/info).
-- `delegate-to-team` affiche en tête `routed_to` (dev | reviewer).
-- Tous les 3 rapportent le contenu de l'agent **sans reformatage**.
+- `@Kael` (application `KisnLab Bot`) → skills OpenClaw généralistes (admin, commercial, comm, stratégie, etc.).
+- `@Dev` (application `KisnLab Dev Team`) → tâches techniques (code, debug, archi) et reviews de PR.
 
-Voir aussi `LANGGRAPH.md` pour le détail des graphes côté API.
+Voir `DISCORD.md` pour la config bot et `LANGGRAPH.md` pour les graphes côté API.
 
 ---
 
