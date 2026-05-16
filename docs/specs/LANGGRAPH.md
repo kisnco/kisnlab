@@ -236,5 +236,6 @@ L'agent `dev` est en **lecture seule** sur GitHub (`gh_pr_list`, `gh_pr_get`, `g
 - [x] Phase C — Tracing Langfuse via `CallbackHandler` (run_name=`dev_agent`)
 - [x] Phase 1 — Équipe Dev + Reviewer (PR-1 → PR-4 ✅)
 - [x] Phase 2 — Mémoire conversationnelle (`MemorySaver` + `thread_id = channel Discord`)
+- [ ] Phase 3 — Boucle de développement autonome (cf. `DEV_AUTONOME.md`)
 - [ ] Phase F — `commercial` / `admin` / `comm` + pattern draft Discord
-- [ ] Plus tard — `PostgresSaver` (mémoire persistante), Dev avec tools d'écriture (Codex)
+- [ ] Plus tard — `PostgresSaver` (mémoire persistante)

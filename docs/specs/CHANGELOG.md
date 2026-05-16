@@ -8,6 +8,21 @@ Format : `[YYYY-MM-DD] [composant] description`
 
 ## 2026-05-16
 
+### Phase 3 — Conception : boucle de développement autonome
+
+Nouveau spec `docs/specs/DEV_AUTONOME.md` (statut : conception, aucun code). Vision validée par Mélodie : un agent dev autonome qui transforme une demande Discord en PR prête à merger — crée l'issue user story, code, teste, debug, ouvre la PR, itère avec le reviewer jusqu'à convergence. **Seule Mélodie merge.**
+
+Décisions actées :
+- **Wrapper, ne pas reconstruire** : on réutilise un outil de codage existant (Claude Code ou Codex) comme moteur ; LangGraph reste l'orchestrateur (boucle, gates, budget).
+- **Moteur : Codex** (CLI d'OpenAI). Facteur décisif = coût : Codex est inclus dans l'abonnement ChatGPT Plus (forfaitaire) là où Claude Code imposerait l'API Anthropic au token pour un usage headless. Orchestrateur LangGraph + Reviewer restent sur l'API Claude (Haiku) — stack mixte assumée. Auth Codex montée dans le runner (compte ChatGPT).
+- Runner isolé `kisnlab-dev-runner` : **clone persistant, branche jetable** (`git fetch` + reset par run, pas de re-clone), réseau isolé, **pas de DinD** — runtimes suffisent.
+- Boucle : la PR n'est créée **qu'une fois** — les itérations poussent des commits sur la même branche, le reviewer re-review le diff.
+- Communication Dev ↔ Reviewer **bidirectionnelle** via le fil de commentaires PR : reviewer poste sa review, et le moteur peut poser une question (node `ask_reviewer`).
+- **Connaissance projet** : l'agent lit `docs/` + `CLAUDE.md` en début de run et met à jour la doc impactée avant la PR (vérifié par le reviewer). **Documentation markdown versionnée, pas de pgvector** — cohérent avec la décision Q2 du projet.
+- **Non-régression** : tout bug corrigé ⇒ test de non-régression committé + journal `LESSONS.md` lu en début de run — l'agent apprend de ses erreurs.
+- **Arbitrage humain** : au-delà de 4 retours Dev↔Reviewer sans accord, node `escalate` → synthèse postée sur Discord + `interrupt` LangGraph ; Mélodie tranche (décision prépondérante), le run reprend selon sa directive. Checkpointer `PostgresSaver` requis pour la survie des runs en pause.
+- Découpage P3.0 (spec) → P3.1 (runner) → P3.2 (boucle GitHub) → P3.3 (boucle Dev↔Reviewer) → P3.4 (E2E web).
+
 ### Phase 2 — Mémoire conversationnelle des agents (LangGraph checkpointer)
 
 Branche `feat/agent-memory-langgraph`. Fix du bug observé en test live : Dev oubliait tout entre deux tours d'une même conversation Discord.
